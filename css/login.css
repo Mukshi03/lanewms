@@ -1,8 +1,6 @@
 /* Sign-in page. Uses the colour tokens and .field/.btn/.chk styles from styles.css. */
 .login-page{min-height:100%}
 .login{display:grid;grid-template-columns:minmax(320px,0.9fr) 1.1fr;min-height:100vh}
-.brand-row{display:flex;align-items:center;gap:10px}
-.brand-row b{display:block;font-size:15px}.brand-row span{font-size:11.5px;opacity:.75}
 
 /* left panel */
 .login-hero{position:relative;overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;gap:32px;padding:36px 40px;
@@ -10,13 +8,12 @@
 .login-hero::before,.login-hero::after{content:"";position:absolute;border-radius:50%;border:1px solid rgba(255,255,255,.12);pointer-events:none}
 .login-hero::before{width:520px;height:520px;right:-220px;bottom:-200px}
 .login-hero::after{width:340px;height:340px;right:-120px;bottom:-110px;background:rgba(255,255,255,.04)}
-.login-hero .logo{background:#fff;color:#1D5FD1}
-.hero-copy{position:relative;z-index:1;max-width:420px}
+.hero-copy{position:relative;z-index:1;max-width:420px;margin-top:auto}
 .hero-copy h2{font-size:28px;line-height:1.25;font-weight:600;margin:0 0 22px;text-wrap:balance}
 .hero-copy ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:14px}
 .hero-copy li{display:flex;align-items:center;gap:12px;font-size:14.5px;color:rgba(255,255,255,.92)}
 .hero-copy svg{width:34px;height:34px;padding:7px;flex:none;border-radius:8px;background:rgba(255,255,255,.12);fill:none;stroke:#fff;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-.login-hero small{position:relative;z-index:1;font-size:12.5px;color:rgba(255,255,255,.7)}
+.login-hero small{position:relative;z-index:1;margin-top:auto;font-size:12.5px;color:rgba(255,255,255,.7)}
 
 /* right panel */
 .login-main{display:flex;align-items:center;justify-content:center;padding:40px 24px;background:var(--bg)}
@@ -24,7 +21,6 @@
 @keyframes cardIn{from{opacity:0;transform:translateY(8px)}}
 .login-card h1{font-size:26px;margin:0}
 .login-card>.note{margin:0 0 18px;font-size:13.5px}
-.mobile-only{display:none}
 #loginForm{display:flex;flex-direction:column;gap:14px}
 #loginForm .field{font-size:13px;font-weight:500}
 #loginForm .field input{height:42px;font-size:14px;border-radius:8px;transition:border-color .12s,box-shadow .12s}
@@ -64,8 +60,6 @@ body.leaving .login-card{opacity:0;transform:translateY(-6px);transition:opacity
 @media (max-width:860px){
   .login{grid-template-columns:1fr}
   .login-hero{display:none}
-  .mobile-only{display:flex;margin-bottom:18px}
-  .mobile-only .logo{background:var(--accent);color:var(--accent-ink)}
   .login-main{align-items:flex-start;padding:32px 16px}
 }
 @media (max-width:420px){ .demo-list{grid-template-columns:1fr} }
