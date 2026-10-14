@@ -789,7 +789,7 @@ V['settings.users']=()=>{ const us=AUTH.users(), roles=AUTH.roles();
     {h:'Can open',v:userSummary},
     {h:'Last sign-in',v:u=>u.lastLogin?fmtDateTime(u.lastLogin):'<span class="note">Never</span>'},
     {h:'Status',v:u=>u.active?'<span class="pill p-good">Active</span>':'<span class="pill p-mute">Deactivated</span>'},
-    {h:'',v:u=>`<div class="row">${btn('Edit','editUser',u.id)}${u.id===ME.id?'':btn(u.active?'Deactivate':'Activate','toggleUser',u.id)+btn('Delete','delUser',u.id,'danger')}</div>`}],us),
+    {h:'',v:u=>`<div class="row">${u.role===AUTH.ADMIN?'':btn('Permissions','userAccess',u.id,'pri')}${btn('Edit','editUser',u.id)}${u.id===ME.id?'':btn(u.active?'Deactivate':'Activate','toggleUser',u.id)+btn('Delete','delUser',u.id,'danger')}</div>`}],us),
     `<button class="btn sm" data-go="settings.roles">Roles & permissions</button>`)); };
 V['settings.roles']=()=>{ const roles=AUTH.roles(), names=Object.keys(roles), us=AUTH.users();
   const mods=allMods().filter(m=>!AUTH.ADMIN_ONLY.includes(m.id));
@@ -1024,6 +1024,11 @@ const ACT={
   newReason(){ form('New reason code',[{id:'r',label:'Reason',req:1}],v=>{ S.reasons.push(v.r); done('Reason added.'); }); },
   newUser(){ adminOnly(); userForm(); },
   editUser(id){ adminOnly(); userForm(AUTH.users().find(u=>u.id===id)); },
+  userAccess(id){ adminOnly(); const u=AUTH.users().find(x=>x.id===id);
+    form('Permissions · '+u.name,[{type:'html',html:`<p class="note" style="margin:0">${esc(u.email)} · Role: <b>${esc(u.role)}</b>. Choose <b>Custom access</b> to give this person their own modules and options.</p><input type="hidden" id="f_role" value="${esc(u.role)}">`+userAccessHtml(u,u.role)}],
+      async()=>{ const access=readUserAccess(); const saved=await AUTH.saveUser({name:u.name,email:u.email,title:u.title,role:u.role,access},u.id);
+        const n=AUTH.users().find(x=>x.id===saved.id); done(Array.isArray(n.access)?`${n.name} now has custom access.`:`${n.name} now uses the ${n.role} role's access.`); },'Save permissions');
+    syncMods($('#accTreeBox')); },
   toggleUser(id){ const u=AUTH.users().find(x=>x.id===id); AUTH.setActive(id,!u.active); done(u.active?`${u.name} deactivated. They can no longer sign in.`:`${u.name} can sign in again.`); },
   delUser(id){ adminOnly(); const u=AUTH.users().find(x=>x.id===id); modal('Delete '+u.name+'?',`<p style="margin:0">${esc(u.email)} will no longer be able to sign in. This cannot be undone. To block sign-in but keep the account, deactivate it instead.</p>`,`<button class="btn" data-close="1">Keep user</button><button class="btn danger" data-act="delUserYes" data-id="${esc(id)}">Delete user</button>`); },
   delUserYes(id){ const u=AUTH.deleteUser(id); done(u.name+' deleted.'); },

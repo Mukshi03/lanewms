@@ -63,7 +63,7 @@ Default role access:
 
 ## Publishing changes
 
-`index.html` and `login.html` load the CSS and JavaScript with a version number, for example `js/app.js?v=20261014-3`. When you change a CSS or JS file, change that number in both HTML files so browsers fetch the new files instead of using saved copies.
+`index.html` and `login.html` load the CSS and JavaScript with a version number, for example `js/app.js?v=20261014-4`. When you change a CSS or JS file, change that number in both HTML files so browsers fetch the new files instead of using saved copies.
 
 ## Data
 
