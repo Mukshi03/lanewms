@@ -10,7 +10,7 @@ const AUTH = (() => {
 
   // Demo accounts created on first visit. Their passwords are shown on the sign-in page.
   const DEMO = [
-    {email:'admin@graylane.demo',      password:'Admin@2026', name:'Hamza Kadenja',        role:ADMIN,        title:'General Manager'},
+    {email:'admin@graylane.demo',      password:'Admin@2026', name:'Admin',                role:ADMIN,        title:'General Manager'},
     {email:'supervisor@graylane.demo', password:'Super@2026', name:'Warehouse Supervisor', role:'Supervisor', title:'Jeddah warehouses'},
     {email:'operator@graylane.demo',   password:'Oper@2026',  name:'Picker 1',             role:'Operator',   title:'Warehouse operator'},
     {email:'finance@graylane.demo',    password:'Fin@2026',   name:'Finance Officer',      role:'Finance',    title:'Billing & receivables'}
@@ -49,7 +49,12 @@ const AUTH = (() => {
   function data(){ return db || (db = readDb()); }
 
   const ready = (async () => {
-    if(data()) return;
+    if(data()){
+      // Browsers set up before the rename still have the old name on the demo admin account.
+      const a = db.users.find(u => u.email === DEMO[0].email && u.name === 'Hamza Kadenja');
+      if(a){ a.name = DEMO[0].name; try{ writeDb(); }catch(e){} }
+      return;
+    }
     const users = [];
     for(const [i,a] of DEMO.entries()) users.push({id:'U-'+String(i+1).padStart(3,'0'), email:a.email, name:a.name, title:a.title, role:a.role,
       pass:await hash(a.email, a.password), active:true, demo:true, created:new Date().toISOString(), lastLogin:null});
