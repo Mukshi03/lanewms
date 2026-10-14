@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Gray Lane 3PL ERP prototype: inbound, inventory, outbound, billing and ZATCA invoicing for a Saudi warehouse operator.">
+<meta name="color-scheme" content="light dark">
+<title>Gray Lane 3PL ERP</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%231D5FD1'/%3E%3Ctext x='16' y='21' font-family='Arial' font-weight='700' font-size='13' fill='white' text-anchor='middle'%3EGL%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<div class="app">
+  <aside class="side" id="side" aria-label="Modules"></aside>
+  <div class="main">
+    <header class="top">
+      <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
+      <label class="search" for="q"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="Search SKU, LPN, ASN, order, invoice, client" autocomplete="off"></label>
+      <span class="pill p-warn" title="All records are sample data saved in this browser">Sample data</span>
+      <div class="user"><span class="avatar">HK</span><div><b style="font-size:13px">Hamza Kadenja</b><small>General Manager</small></div></div>
+    </header>
+    <main class="wrap" id="view"></main>
+  </div>
+</div>
+<div id="modalRoot"></div>
+<script src="js/app.js"></script>
+</body>
+</html>
