@@ -366,7 +366,7 @@ function go(m,s){
 function closeMenu(){ $('#side').classList.remove('show'); document.body.classList.remove('menu-open'); }
 
 function renderSide(){
-  let h=`<div class="brand"><div class="logo">GL</div><div><b>Gray Lane ERP</b><span>${esc(S.company.name)}</span></div></div>`;
+  let h=`<div class="brand"><b>Warehouse Management System</b></div>`;
   for(const g of NAV){
     const mods=g.m.filter(m=>allowed(m.id)); if(!mods.length) continue;
     h+=`<div class="grp">${g.g==='OVERVIEW'?'':`<h3>${g.g}</h3>`}`;

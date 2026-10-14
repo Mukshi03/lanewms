@@ -34,7 +34,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .side{width:252px;flex:none;background:var(--surface);border-right:1px solid var(--line);display:flex;flex-direction:column;gap:10px;padding:14px 10px 24px;position:sticky;top:0;height:100vh;overflow-y:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:4px 8px 12px;border-bottom:1px solid var(--line-2)}
 .logo{width:34px;height:34px;border-radius:8px;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;font-weight:700;font-size:14px}
-.brand b{display:block;font-size:15px}.brand span{font-size:11.5px;color:var(--muted)}
+.brand b{display:block;font-size:15px;line-height:1.3;padding:6px 0}
 .grp{display:flex;flex-direction:column;gap:1px}
 .grp h3{margin:6px 0 2px;padding:0 10px;font-size:11px;letter-spacing:.08em;color:var(--faint);font-weight:600}
 .nav{display:flex;align-items:center;gap:10px;width:100%;border:0;background:none;text-align:left;padding:8px 10px;border-radius:6px;color:var(--fg-2);font-size:13.5px;cursor:pointer}
