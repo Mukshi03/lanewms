@@ -478,8 +478,11 @@ const NAV=[
 ];
 const MOD={}; NAV.forEach(g=>g.m.forEach(m=>MOD[m.id]=m));
 let route={m:'home',s:'dash'}, openMods=new Set(['home']), filt={};
-function parseHash(){ const h=(location.hash||'').slice(1).split('.'); if(MOD[h[0]]){ route={m:h[0],s:(MOD[h[0]].subs.find(s=>s[0]===h[1])||MOD[h[0]].subs[0])[0]}; openMods.add(route.m); } else route={m:'home',s:'dash'}; }
+const ME=AUTH.get();
+const allowed=m=>!!ME&&AUTH.can(ME.role,m);
+function parseHash(){ const h=(location.hash||'').slice(1).split('.'); if(MOD[h[0]]&&allowed(h[0])){ route={m:h[0],s:(MOD[h[0]].subs.find(s=>s[0]===h[1])||MOD[h[0]].subs[0])[0]}; openMods.add(route.m); } else route={m:'home',s:'dash'}; }
 function go(m,s){
+  if(!allowed(m)){ toast(`Your role (${ME.role}) does not have access to ${MOD[m].t}.`); return; }
   route={m,s:s||MOD[m].subs[0][0]}; openMods.add(m);
   const h='#'+m+'.'+route.s; try{ if(location.hash!==h) history.pushState(null,'',h); }catch(e){}
   closeMenu(); render(); window.scrollTo(0,0);
@@ -491,8 +494,9 @@ function closeMenu(){ $('#side').classList.remove('show'); document.body.classLi
 function renderSide(){
   let h=`<div class="brand"><div class="logo">GL</div><div><b>Gray Lane ERP</b><span>${esc(S.company.name)}</span></div></div>`;
   for(const g of NAV){
+    const mods=g.m.filter(m=>allowed(m.id)); if(!mods.length) continue;
     h+=`<div class="grp">${g.g==='OVERVIEW'?'':`<h3>${g.g}</h3>`}`;
-    for(const m of g.m){
+    for(const m of mods){
       const on=route.m===m.id, open=openMods.has(m.id)&&m.subs.length>1;
       h+=`<button class="nav ${on?'on':''} ${open?'open':''}" data-nav="${m.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${IC[m.id]}</svg><span>${m.t}</span>${m.subs.length>1?'<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>':''}</button>`;
       if(open) h+=`<div class="subs">${m.subs.map(s=>`<button class="sub ${on&&route.s===s[0]?'on':''}" data-go="${m.id}.${s[0]}">${s[1]}</button>`).join('')}</div>`;
@@ -559,7 +563,7 @@ V['home.dash']=()=>{
     ['Trips on the road',S.trips.filter(t=>t.status!=='Completed').length,'Transport','transport.trips'],
     ['Cycle counts open',S.counts.filter(c=>c.status==='Open').length,'Inventory','inventory.count'],
     ['Returns to inspect',S.returns.filter(r=>r.status==='Requested').length,'Returns','returns.list'],
-    ['VAS work orders open',S.vas.filter(v=>v.status==='Open').length,'VAS','vas.list']];
+    ['VAS work orders open',S.vas.filter(v=>v.status==='Open').length,'VAS','vas.list']].filter(r=>allowed(r[3].split('.')[0]));
   const kpi=(l,v,s,extra='')=>`<div class="card kpi"><span>${l}</span><b>${v}</b>${extra}<small>${s}</small></div>`;
   const max=Math.max(10,...inU,...outU); const step=Math.ceil(max/4/10)*10||10; const top=step*4;
   const X=i=>58+i*72, Y=v=>170-v/top*150;
@@ -567,14 +571,14 @@ V['home.dash']=()=>{
     ${[0,1,2,3,4].map(k=>`<line x1="44" x2="550" y1="${Y(k*step)}" y2="${Y(k*step)}" stroke="var(--line${k?'-2':''})"/><text x="38" y="${Y(k*step)+4}" text-anchor="end">${n0(k*step)}</text>`).join('')}
     ${days.map((d,i)=>`<rect x="${X(i)}" y="${Y(inU[i])}" width="24" height="${170-Y(inU[i])}" rx="2" fill="var(--accent)"><title>Received ${n0(inU[i])}</title></rect><rect x="${X(i)+26}" y="${Y(outU[i])}" width="24" height="${170-Y(outU[i])}" rx="2" fill="var(--accent-2)"><title>Shipped ${n0(outU[i])}</title></rect><text x="${X(i)+25}" y="190" text-anchor="middle">${new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</text>`).join('')}
   </svg>`;
-  return page('Operations Dashboard',`<button class="btn" data-act="newASN">+ New ASN</button><button class="btn pri" data-act="newOrder">+ Outbound order</button>`,`
+  return page('Operations Dashboard',`${allowed('inbound')?'<button class="btn" data-act="newASN">+ New ASN</button>':''}${allowed('orders')?'<button class="btn pri" data-act="newOrder">+ Outbound order</button>':''}`,`
   <section class="grid g-kpi" aria-label="Key figures">
     ${kpi('Active clients',S.clients.length,`${S.items.length} SKUs under management`)}
     ${kpi('Pallets in stock',n0(pallets),`${n0(sum(S.stock,s=>s.qty))} units`)}
     ${kpi('Space utilisation',Math.round(pallets/cap*100)+'%',`${pallets} of ${cap} pallet positions`,`<div class="bar"><i style="width:${Math.min(100,pallets/cap*100)}%"></i></div>`)}
     ${kpi('Shipped today',shippedToday,`${dueToday.length} orders due today or tomorrow`)}
     ${kpi('On-time dispatch',closed.length?Math.round(ontime/closed.length*100)+'%':'—',`${ontime} of ${closed.length} orders by due date`)}
-    ${kpi('Revenue this month',sar(monthCh),`SAR, ex VAT · ${sar(unbilled)} unbilled`)}
+    ${allowed('billing')||allowed('finance')?kpi('Revenue this month',sar(monthCh),`SAR, ex VAT · ${sar(unbilled)} unbilled`):''}
   </section>
   <section class="grid g-2">
     ${card('Units received vs shipped · last 7 days',`<div class="card-b">${chart}</div>`,`<span class="note"><span style="display:inline-block;width:10px;height:10px;background:var(--accent);border-radius:2px"></span> Received &nbsp; <span style="display:inline-block;width:10px;height:10px;background:var(--accent-2);border-radius:2px"></span> Shipped</span>`)}
@@ -583,7 +587,7 @@ V['home.dash']=()=>{
   <section class="grid g-3">
     ${card('Alerts',alerts.length?alerts.map(a=>`<div class="alert">${pill(a.lvl)}<div><b>${esc(a.t)}</b><small>${esc(a.d)}</small></div></div>`).join(''):'<div class="empty">No alerts. Everything is within limits.</div>',`<span class="pill p-${alerts.some(a=>a.lvl==='High')?'bad':'mute'}">${alerts.length} open</span>`)}
     ${card('Warehouse occupancy',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px">${S.warehouses.map(w=>{const p=palletsOf(w.id),pc=Math.round(p/w.capacity*100);return `<div><div class="row" style="justify-content:space-between"><span>${esc(w.name)}</span><b class="num">${pc}%</b></div><div class="bar"><i style="width:${Math.min(100,pc)}%;background:${pc>90?'var(--bad)':pc>80?'var(--accent-2)':'var(--accent)'}"></i></div><span class="note">${p} of ${w.capacity} pallets</span></div>`;}).join('')}<span class="note">Red above 90%, amber above 80%.</span></div>`,`<button class="btn sm" data-go="space.avail">Space</button>`)}
-    ${card('Billing',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px"><div class="dl"><div><span>Charges this month</span><b>${S.charges.filter(c=>c.at>=monthStart).length}</b></div><div><span>Invoices issued</span><b>${S.invoices.filter(v=>v.status!=='Draft').length}</b></div><div><span>Unbilled, SAR</span><b>${sar(unbilled)}</b></div><div><span>Overdue, SAR</span><b style="color:${overdue?'var(--bad)':'inherit'}">${sar(overdue)}</b></div></div>${mixBar()}<button class="btn sm pri" data-go="billing.run" style="align-self:flex-start">Run billing</button></div>`)}
+    ${!allowed('billing')?'':card('Billing',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px"><div class="dl"><div><span>Charges this month</span><b>${S.charges.filter(c=>c.at>=monthStart).length}</b></div><div><span>Invoices issued</span><b>${S.invoices.filter(v=>v.status!=='Draft').length}</b></div><div><span>Unbilled, SAR</span><b>${sar(unbilled)}</b></div><div><span>Overdue, SAR</span><b style="color:${overdue?'var(--bad)':'inherit'}">${sar(overdue)}</b></div></div>${mixBar()}<button class="btn sm pri" data-go="billing.run" style="align-self:flex-start">Run billing</button></div>`)}
   </section>
   ${card('Recent outbound orders',ordersTable(S.orders.slice().reverse().slice(0,6)),`<button class="btn sm" data-go="orders.all">All orders</button>`)}`,{tabs:false});
 };
@@ -1091,9 +1095,19 @@ $('#q').addEventListener('keydown',e=>{
   filt.stk={q:e.target.value.trim()}; go('inventory','stock'); toast('Showing stock matching "'+e.target.value.trim()+'".');
 });
 
-/* boot */
-S=load();
-if(!S||!S.clients||!S.clients.length) seed(); else { normalizeItems(); save(); }
-parseHash();
-try{ render(); }
-catch(err){ console.error(err); seed(); route={m:'home',s:'dash'}; render(); toast('Saved data could not be read, so fresh sample data was loaded.'); }
+$('#signOut').addEventListener('click',()=>{ AUTH.signOut(); location.replace('login.html'); });
+// Another tab signed out (or in as someone else): follow it.
+window.addEventListener('storage',e=>{ if(e.key==='lanewms-session'){ const s=AUTH.get(); if(!s||s.email!==ME.email) location.replace('login.html'); } });
+
+/* boot (only when signed in; otherwise auth.js is already redirecting to login.html) */
+if(ME){
+  $('#userName').textContent=ME.name; $('#userRole').textContent=ME.role+' · '+ME.title;
+  $('#userAvatar').textContent=ME.name.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  S=load();
+  if(!S||!S.clients||!S.clients.length) seed(); else { normalizeItems(); save(); }
+  parseHash();
+  try{ history.replaceState(null,'','#'+route.m+'.'+route.s); }catch(e){}
+  try{ render(); }
+  catch(err){ console.error(err); seed(); route={m:'home',s:'dash'}; render(); toast('Saved data could not be read, so fresh sample data was loaded.'); }
+  setInterval(()=>{ if(!AUTH.get()) location.replace('login.html'); },60000); // session expiry
+}

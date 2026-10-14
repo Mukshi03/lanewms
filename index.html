@@ -11,6 +11,8 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="css/styles.css">
+<script src="js/auth.js"></script>
+<script>AUTH.requireSession();</script>
 </head>
 <body>
 <div class="app">
@@ -20,7 +22,8 @@
       <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
       <label class="search" for="q"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="q" placeholder="Search SKU, LPN, ASN, order, invoice, client" autocomplete="off"></label>
       <span class="pill p-warn" title="All records are sample data saved in this browser">Sample data</span>
-      <div class="user"><span class="avatar">HK</span><div><b style="font-size:13px">Hamza Kadenja</b><small>General Manager</small></div></div>
+      <div class="user"><span class="avatar" id="userAvatar"></span><div><b style="font-size:13px" id="userName"></b><small id="userRole"></small></div></div>
+      <button class="icon-btn signout" id="signOut" aria-label="Sign out" title="Sign out"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 4h4a1 1 0 011 1v14a1 1 0 01-1 1h-4M10 17l5-5-5-5M15 12H3"/></svg></button>
     </header>
     <main class="wrap" id="view"></main>
   </div>
