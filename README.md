@@ -44,7 +44,8 @@ Opening the app takes you to `login.html` first. On the first visit four demo ac
 **Administrators** have full access, and only they can open **Settings**:
 
 - **Settings → Users & access**: create users with their own email and password, change their role, reset passwords, and deactivate or delete accounts. Passwords need at least 8 characters with a letter and a number.
-- **Settings → Roles & permissions**: tick which modules each role can open, and add custom roles (for example Auditor) starting from an existing role's access.
+- **Settings → Roles & permissions**: tick which modules and which options inside each module (for example Inbound → ASN, Receiving, GRN) each role can open. Ticking a module ticks all its options. Add custom roles (for example Auditor) starting from an existing role's access.
+- **Per-user access**: when creating or editing a user, choose **Same as role** or **Custom access** and tick exactly the modules and options that person can open. Their sidebar, page tabs and dashboard show only what they have been given.
 - **Clients & Contracts → Clients**: add, edit and remove clients. A client with stock, open orders, unbilled charges or unpaid invoices cannot be removed until that work is closed. A client with past records is archived (hidden but kept for history and reports, and can be restored). A client with no records is deleted.
 
 Safety checks: an administrator cannot delete or deactivate their own account, and there is always at least one active Administrator. Role changes and deactivations apply to signed-in users straight away. Sessions last 8 hours; with **Keep me signed in** unticked, closing the browser signs you out.
@@ -62,7 +63,7 @@ Default role access:
 
 ## Publishing changes
 
-`index.html` and `login.html` load the CSS and JavaScript with a version number, for example `js/app.js?v=20261014-2`. When you change a CSS or JS file, change that number in both HTML files so browsers fetch the new files instead of using saved copies.
+`index.html` and `login.html` load the CSS and JavaScript with a version number, for example `js/app.js?v=20261014-3`. When you change a CSS or JS file, change that number in both HTML files so browsers fetch the new files instead of using saved copies.
 
 ## Data
 

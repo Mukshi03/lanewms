@@ -353,11 +353,15 @@ const NAV=[
 const MOD={}; NAV.forEach(g=>g.m.forEach(m=>MOD[m.id]=m));
 let route={m:'home',s:'dash'}, openMods=new Set(['home']), filt={};
 const ME=AUTH.get();
-const allowed=m=>!!ME&&AUTH.can(ME.role,m);
-function parseHash(){ const h=(location.hash||'').slice(1).split('.'); if(MOD[h[0]]&&allowed(h[0])){ route={m:h[0],s:(MOD[h[0]].subs.find(s=>s[0]===h[1])||MOD[h[0]].subs[0])[0]}; openMods.add(route.m); } else route={m:'home',s:'dash'}; }
+const allowedSub=(m,s)=>!!ME&&AUTH.hasAccess(ME.access,m,s);
+const allowed=m=>allowedSub(m);
+const visibleSubs=m=>MOD[m].subs.filter(x=>allowedSub(m,x[0]));
+function parseHash(){ const h=(location.hash||'').slice(1).split('.'); const vs=MOD[h[0]]?visibleSubs(h[0]):[]; if(vs.length){ route={m:h[0],s:(vs.find(s=>s[0]===h[1])||vs[0])[0]}; openMods.add(route.m); } else route={m:'home',s:'dash'}; }
 function go(m,s){
-  if(!allowed(m)){ toast(`Your role (${ME.role}) does not have access to ${MOD[m].t}.`); return; }
-  route={m,s:s||MOD[m].subs[0][0]}; openMods.add(m);
+  if(s==='itemform'){ if(!allowedSub('master','items')){ toast('You do not have access to Items.'); return; } }
+  else { const vs=visibleSubs(m); if(!vs.length){ toast(`You do not have access to ${MOD[m].t}.`); return; }
+    if(!s||!allowedSub(m,s)) s=vs[0][0]; }
+  route={m,s}; openMods.add(m);
   const h='#'+m+'.'+route.s; try{ if(location.hash!==h) history.pushState(null,'',h); }catch(e){}
   closeMenu(); render(); window.scrollTo(0,0);
   const v=$('#view'); v.classList.remove('enter'); void v.offsetWidth; v.classList.add('enter');
@@ -371,9 +375,9 @@ function renderSide(){
     const mods=g.m.filter(m=>allowed(m.id)); if(!mods.length) continue;
     h+=`<div class="grp">${g.g==='OVERVIEW'?'':`<h3>${g.g}</h3>`}`;
     for(const m of mods){
-      const on=route.m===m.id, open=openMods.has(m.id)&&m.subs.length>1;
-      h+=`<button class="nav ${on?'on':''} ${open?'open':''}" data-nav="${m.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${IC[m.id]}</svg><span>${m.t}</span>${m.subs.length>1?'<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>':''}</button>`;
-      if(open) h+=`<div class="subs">${m.subs.map(s=>`<button class="sub ${on&&route.s===s[0]?'on':''}" data-go="${m.id}.${s[0]}">${s[1]}</button>`).join('')}</div>`;
+      const vs=visibleSubs(m.id), on=route.m===m.id, open=openMods.has(m.id)&&vs.length>1;
+      h+=`<button class="nav ${on?'on':''} ${open?'open':''}" data-nav="${m.id}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">${IC[m.id]}</svg><span>${m.t}</span>${vs.length>1?'<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>':''}</button>`;
+      if(open) h+=`<div class="subs">${vs.map(s=>`<button class="sub ${on&&route.s===s[0]?'on':''}" data-go="${m.id}.${s[0]}">${s[1]}</button>`).join('')}</div>`;
     }
     h+='</div>';
   }
@@ -384,7 +388,7 @@ function renderSide(){
 function page(title,actions,body,{tabs=true}={}){
   const m=MOD[route.m]; const sub=m.subs.find(s=>s[0]===route.s);
   return `<div class="head"><div><div class="crumb">${m.t}${m.subs.length>1?' / '+sub[1]:''}</div><h1>${title}</h1></div><div class="actions">${actions||''}</div></div>
-  ${tabs&&m.subs.length>1?`<nav class="tabs" aria-label="${m.t} sections">${m.subs.map(s=>`<button class="tab ${route.s===s[0]?'on':''}" data-go="${m.id}.${s[0]}">${s[1]}</button>`).join('')}</nav>`:''}${body}`;
+  ${tabs&&visibleSubs(m.id).length>1?`<nav class="tabs" aria-label="${m.t} sections">${visibleSubs(m.id).map(s=>`<button class="tab ${route.s===s[0]?'on':''}" data-go="${m.id}.${s[0]}">${s[1]}</button>`).join('')}</nav>`:''}${body}`;
 }
 function table(cols,rows,{empty='Nothing here yet.',click}={}){
   if(!rows.length) return `<div class="empty">${empty}</div>`;
@@ -440,7 +444,7 @@ V['home.dash']=()=>{
     ['Trips on the road',S.trips.filter(t=>t.status!=='Completed').length,'Transport','transport.trips'],
     ['Cycle counts open',S.counts.filter(c=>c.status==='Open').length,'Inventory','inventory.count'],
     ['Returns to inspect',S.returns.filter(r=>r.status==='Requested').length,'Returns','returns.list'],
-    ['VAS work orders open',S.vas.filter(v=>v.status==='Open').length,'VAS','vas.list']].filter(r=>allowed(r[3].split('.')[0]));
+    ['VAS work orders open',S.vas.filter(v=>v.status==='Open').length,'VAS','vas.list']].filter(r=>allowedSub(...r[3].split('.')));
   const kpi=(l,v,s,extra='')=>`<div class="card kpi"><span>${l}</span><b>${v}</b>${extra}<small>${s}</small></div>`;
   const max=Math.max(10,...inU,...outU); const step=Math.ceil(max/4/10)*10||10; const top=step*4;
   const X=i=>58+i*72, Y=v=>170-v/top*150;
@@ -448,7 +452,7 @@ V['home.dash']=()=>{
     ${[0,1,2,3,4].map(k=>`<line x1="44" x2="550" y1="${Y(k*step)}" y2="${Y(k*step)}" stroke="var(--line${k?'-2':''})"/><text x="38" y="${Y(k*step)+4}" text-anchor="end">${n0(k*step)}</text>`).join('')}
     ${days.map((d,i)=>`<rect x="${X(i)}" y="${Y(inU[i])}" width="24" height="${170-Y(inU[i])}" rx="2" fill="var(--accent)"><title>Received ${n0(inU[i])}</title></rect><rect x="${X(i)+26}" y="${Y(outU[i])}" width="24" height="${170-Y(outU[i])}" rx="2" fill="var(--accent-2)"><title>Shipped ${n0(outU[i])}</title></rect><text x="${X(i)+25}" y="190" text-anchor="middle">${new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</text>`).join('')}
   </svg>`;
-  return page('Operations Dashboard',`${allowed('inbound')?'<button class="btn" data-act="newASN">+ New ASN</button>':''}${allowed('orders')?'<button class="btn pri" data-act="newOrder">+ Outbound order</button>':''}`,`
+  return page('Operations Dashboard',`${allowedSub('inbound','asn')?'<button class="btn" data-act="newASN">+ New ASN</button>':''}${allowedSub('orders','all')?'<button class="btn pri" data-act="newOrder">+ Outbound order</button>':''}`,`
   ${setupCard()}
   <section class="grid g-kpi" aria-label="Key figures">
     ${kpi('Active clients',S.clients.length,`${S.items.length} SKUs under management`)}
@@ -475,7 +479,7 @@ function setupCard(){
     ['Add a client','Company, contact and contract rates',activeClients().length>0,'clients.list'],
     ['Add items','The products each client stores',S.items.length>0,'master.items']];
   if(steps.every(x=>x[2])) return '';
-  return card('Get started',`<div class="card-b setup">${steps.map((x,i)=>`<div class="setup-step ${x[2]?'ok':''}"><span class="setup-n">${x[2]?'✓':i+1}</span><div><b>${x[0]}</b><small>${x[1]}</small></div>${x[2]?'<span class="note">Done</span>':allowed(x[3].split('.')[0])?`<button class="btn sm" data-go="${x[3]}">Open</button>`:''}</div>`).join('')}</div>`,`<span class="note">${steps.filter(x=>x[2]).length} of ${steps.length} done</span>`);
+  return card('Get started',`<div class="card-b setup">${steps.map((x,i)=>`<div class="setup-step ${x[2]?'ok':''}"><span class="setup-n">${x[2]?'✓':i+1}</span><div><b>${x[0]}</b><small>${x[1]}</small></div>${x[2]?'<span class="note">Done</span>':allowedSub(...x[3].split('.'))?`<button class="btn sm" data-go="${x[3]}">Open</button>`:''}</div>`).join('')}</div>`,`<span class="note">${steps.filter(x=>x[2]).length} of ${steps.length} done</span>`);
 }
 function mixBar(){
   const g={}; S.charges.forEach(c=>{ const k=c.type.startsWith('VAS')?'VAS':c.type==='Order fee'||c.type==='Handling out'||c.type==='Handling in'||c.type==='Returns handling'?'Handling':c.type; g[k]=(g[k]||0)+c.amount; });
@@ -755,10 +759,25 @@ V['reports.sla']=()=>{ const rows=S.clients.map(c=>{const os=S.orders.filter(o=>
 V['settings.company']=()=>page('Company','',card('Company details',`<form class="card-b" id="coForm" style="display:flex;flex-direction:column;gap:12px"><div class="fgrid">${[['name','Company name'],['vat','VAT registration number'],['cr','Commercial registration'],['city','City']].map(([k,l])=>`<label class="field" for="co_${k}">${l}<input id="co_${k}" name="${k}" value="${esc(S.company[k])}"></label>`).join('')}</div><div><button class="btn pri" type="submit">Save</button></div></form>`));
 const fmtDateTime=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
 const allMods=()=>NAV.flatMap(g=>g.m);
-const roleMods=role=>allMods().filter(m=>AUTH.can(role,m.id));
-const roleSummary=role=>{ const r=AUTH.roles()[role]; if(!r) return '—'; if(r.modules==='*') return '<span class="pill p-info">Full access</span>';
-  const ms=roleMods(role); return `<span title="${esc(ms.map(m=>m.t).join(', '))}">${ms.length} of ${allMods().length} modules</span>`; };
-const roleSummaryLong=role=>{ const r=AUTH.roles()[role]; if(!r) return ''; return r.modules==='*'?'Full access to every module, including Settings (users, roles and company).':'Can open: '+roleMods(role).map(m=>esc(m.t)).join(', ')+'.'; };
+const grantMods=()=>allMods().filter(m=>!AUTH.ADMIN_ONLY.includes(m.id));
+const totalPages=()=>grantMods().reduce((t,m)=>t+m.subs.length,0);
+// Readable list: "Inbound, Inventory (Stock, Transfers), ..." — a module in full shows its name only.
+const accessText=list=>grantMods().filter(m=>AUTH.hasAccess(list,m.id)).map(m=>{ const on=m.subs.filter(x=>AUTH.hasAccess(list,m.id,x[0])); return on.length===m.subs.length?esc(m.t):`${esc(m.t)} (${on.map(x=>esc(x[1])).join(', ')})`; }).join(', ');
+const accessCount=list=>grantMods().reduce((t,m)=>t+m.subs.filter(x=>AUTH.hasAccess(list,m.id,x[0])).length,0);
+const accessSummary=(list,custom)=>list==='*'?'<span class="pill p-info">Full access</span>':`<span title="${accessText(list)}">${custom?'<span class="pill p-warn">Custom</span> ':''}${accessCount(list)} of ${totalPages()} pages</span>`;
+const roleSummary=role=>accessSummary(AUTH.roleAccess(role),false);
+const userSummary=u=>{ const ra=AUTH.roleAccess(u.role); const custom=ra!=='*'&&Array.isArray(u.access); return accessSummary(custom?u.access:ra,custom); };
+const roleSummaryLong=role=>{ const ra=AUTH.roleAccess(role); return ra==='*'?'Full access to every module, including Settings (users, roles and company).':'Can open: '+accessText(ra)+'.'; };
+// Compact keys: a module with every option ticked is stored as the module id.
+function accessKeys(checked){ const out=[]; grantMods().forEach(m=>{ const all=m.subs.map(x=>m.id+'.'+x[0]), on=all.filter(k=>checked.includes(k)); if(on.length===all.length) out.push(m.id); else out.push(...on); }); return out; }
+// Tree of module + option checkboxes; g groups one tree (a role name, or "user").
+function accessTree(g,list,lock){
+  return `<div class="acc-tree">${grantMods().map(m=>{ const one=m.subs.length===1, fixed=lock||m.id==='home';
+    const subs=m.subs.map(x=>`<label class="chk"><input type="checkbox" class="acc" data-g="${esc(g)}" data-mod="${m.id}" value="${m.id}.${x[0]}" ${AUTH.hasAccess(list,m.id,x[0])?'checked':''} ${fixed?'disabled':''}>${esc(x[1])}</label>`).join('');
+    return `<div class="acc-m"><label class="chk acc-mh"><input type="checkbox" class="acc-mod" data-g="${esc(g)}" data-mod="${m.id}" ${fixed?'disabled':''}><b>${esc(m.t)}</b>${one?'':`<span class="note">${m.subs.length} options</span>`}</label><div class="acc-subs" ${one?'hidden':''}>${subs}</div></div>`; }).join('')}</div>`;
+}
+// Keep each module checkbox in step with its options (ticked, unticked or partly ticked).
+function syncMods(root){ (root||document).querySelectorAll('.acc-mod').forEach(mc=>{ const subs=[...document.querySelectorAll(`.acc[data-g="${CSS.escape(mc.dataset.g)}"][data-mod="${mc.dataset.mod}"]`)]; const n=subs.filter(i=>i.checked).length; mc.checked=n===subs.length&&n>0; mc.indeterminate=n>0&&n<subs.length; }); }
 V['settings.users']=()=>{ const us=AUTH.users(), roles=AUTH.roles();
   return page('Users & access',`<button class="btn pri" data-act="newUser">+ New user</button>`,
   `<p class="note" style="margin:0"><span class="sim">PROTOTYPE</span> Users and passwords are saved in this browser only. A shared team setup needs a sign-in server.</p>`+
@@ -767,7 +786,7 @@ V['settings.users']=()=>{ const us=AUTH.users(), roles=AUTH.roles();
     {h:'Name',v:u=>`<b>${esc(u.name)}</b>${u.id===ME.id?' <span class="pill p-info">You</span>':''}${u.title?`<br><span class="note">${esc(u.title)}</span>`:''}`},
     {h:'Email',v:u=>`<span class="mono">${esc(u.email)}</span>`},
     {h:'Role',v:u=>esc(u.role)},
-    {h:'Can open',v:u=>roleSummary(u.role)},
+    {h:'Can open',v:userSummary},
     {h:'Last sign-in',v:u=>u.lastLogin?fmtDateTime(u.lastLogin):'<span class="note">Never</span>'},
     {h:'Status',v:u=>u.active?'<span class="pill p-good">Active</span>':'<span class="pill p-mute">Deactivated</span>'},
     {h:'',v:u=>`<div class="row">${btn('Edit','editUser',u.id)}${u.id===ME.id?'':btn(u.active?'Deactivate':'Activate','toggleUser',u.id)+btn('Delete','delUser',u.id,'danger')}</div>`}],us),
@@ -775,12 +794,16 @@ V['settings.users']=()=>{ const us=AUTH.users(), roles=AUTH.roles();
 V['settings.roles']=()=>{ const roles=AUTH.roles(), names=Object.keys(roles), us=AUTH.users();
   const mods=allMods().filter(m=>!AUTH.ADMIN_ONLY.includes(m.id));
   const head=names.map(r=>`<th class="mx-c">${esc(r)}<br><span class="note">${us.filter(u=>u.role===r).length} users</span>${roles[r].builtin?'':`<br><button type="button" class="btn sm danger" data-act="delRole" data-id="${esc(r)}" style="margin-top:4px">Delete</button>`}</th>`).join('');
-  const rows=mods.map(m=>`<tr><td><b>${esc(m.t)}</b><br><span class="note">${m.subs.map(x=>esc(x[1])).join(', ')}</span></td>${names.map(r=>{ const all=roles[r].modules==='*', on=all||roles[r].modules.includes(m.id), lock=all||m.id==='home';
-    return `<td class="mx-c"><input type="checkbox" class="acc" data-role="${esc(r)}" value="${m.id}" ${on?'checked':''} ${lock?'disabled':''} aria-label="${esc(r)} can open ${esc(m.t)}"></td>`; }).join('')}</tr>`).join('');
+  const cell=(r,m,x)=>{ const lock=roles[r].modules==='*'||m.id==='home', on=AUTH.hasAccess(roles[r].modules,m.id,x[0]);
+    return `<input type="checkbox" class="acc" data-g="${esc(r)}" data-mod="${m.id}" value="${m.id}.${x[0]}" ${on?'checked':''} ${lock?'disabled':''} aria-label="${esc(r)} can open ${esc(m.t)}: ${esc(x[1])}">`; };
+  const rows=mods.map(m=>{ const one=m.subs.length===1;
+    const head=`<tr class="mx-mod"><td><b>${esc(m.t)}</b>${one?'':`<span class="note"> · ${m.subs.length} options</span>`}</td>${names.map(r=>{ const lock=roles[r].modules==='*'||m.id==='home';
+      return `<td class="mx-c"><input type="checkbox" class="acc-mod" data-g="${esc(r)}" data-mod="${m.id}" ${lock?'disabled':''} aria-label="${esc(r)} can open all of ${esc(m.t)}">${one?`<span hidden>${cell(r,m,m.subs[0])}</span>`:''}</td>`; }).join('')}</tr>`;
+    return head+(one?'':m.subs.map(x=>`<tr class="mx-sub"><td>${esc(x[1])}</td>${names.map(r=>`<td class="mx-c">${cell(r,m,x)}</td>`).join('')}</tr>`).join('')); }).join('');
   const setRow=`<tr><td><b>Settings</b><br><span class="note">Company, users, roles, data</span></td>${names.map(r=>`<td class="mx-c">${roles[r].modules==='*'?'<span class="pill p-good">Yes</span>':'<span class="note">Admin only</span>'}</td>`).join('')}</tr>`;
   return page('Roles & permissions',`<button class="btn" data-act="newRole">+ New role</button><button class="btn pri" type="submit" form="roleForm">Save permissions</button>`,
-    `<p class="note" style="margin:0">Tick the modules each role can open, then save. Administrators always have full access, and only Administrators can open Settings. Changes apply to signed-in users straight away.</p>`+
-    card('Module access by role',`<form id="roleForm"><div class="tbl-wrap"><table class="matrix"><thead><tr><th>Module</th>${head}</tr></thead><tbody>${rows}${setRow}</tbody></table></div></form>`)); };
+    `<p class="note" style="margin:0">Tick the modules and options each role can open, then save. Ticking a module ticks all its options. Users can also get their own custom access in Users &amp; access. Administrators always have full access, and only Administrators can open Settings.</p>`+
+    card('Access by role',`<form id="roleForm"><div class="tbl-wrap"><table class="matrix"><thead><tr><th>Module</th>${head}</tr></thead><tbody>${rows}${setRow}</tbody></table></div></form>`)); };
 function userForm(u){
   const ed=!!u, roles=Object.keys(AUTH.roles()), role=ed?u.role:(roles.includes('Operator')?'Operator':roles[0]);
   form(ed?'Edit user · '+u.name:'New user',[
@@ -788,14 +811,39 @@ function userForm(u){
     {id:'email',label:'Email (used to sign in)',type:'email',value:ed?u.email:'',req:1},
     {id:'title',label:'Job title',value:ed?u.title:''},
     {id:'role',label:'Role',type:'select',options:roles.map(r=>[r,r]),value:role},
-    {type:'html',html:`<div id="rolePrev" class="note">${roleSummaryLong(role)}</div>`},
+    {type:'html',html:userAccessHtml(u,role)},
     {id:'password',label:ed?'New password (leave blank to keep)':'Password',type:'password',req:!ed},
     {id:'confirm',label:'Confirm password',type:'password',req:!ed},
     {type:'html',html:'<p class="note" style="margin:0">At least 8 characters, with at least one letter and one number.'+(ed?' Changing the email also needs a new password.':'')+'</p>'}],
-    async v=>{ const saved=await AUTH.saveUser(v,ed?u.id:null);
-      if(saved.id===ME.id&&saved.role!==ME.role){ location.reload(); return; }
+    async v=>{ v.access=readUserAccess(); const saved=await AUTH.saveUser(v,ed?u.id:null);
+      if(saved.id===ME.id&&(saved.role!==ME.role||JSON.stringify(AUTH.get().access)!==JSON.stringify(ME.access))){ location.reload(); return; }
       if(saved.id===ME.id) fillUser();
       done(ed?`${saved.name} updated.`:`${saved.name} can now sign in as ${saved.role}.`); }, ed?'Save changes':'Create user');
+  syncMods($('#accTreeBox'));
+}
+function userAccessHtml(u,role){
+  const custom=!!u&&Array.isArray(u.access)&&role!==AUTH.ADMIN, list=custom?u.access:AUTH.roleAccess(role);
+  return `<div class="field full" id="accBox"><span>Access</span>
+    <div id="accAdmin" class="note" ${role===AUTH.ADMIN?'':'hidden'}>Administrators have full access to every module, including Settings.</div>
+    <div id="accPick" ${role===AUTH.ADMIN?'hidden':''}>
+      <div class="seg" role="radiogroup" aria-label="Access"><label><input type="radio" name="accmode" value="role" ${custom?'':'checked'}>Same as role</label><label><input type="radio" name="accmode" value="custom" ${custom?'checked':''}>Custom access</label></div>
+      <p class="note" id="accHint" style="margin:6px 0">${custom?'Tick exactly what this person can open.':'Uses the role\'s access. Choose Custom access to change it for this person only.'}</p>
+      <div id="accTreeBox">${accessTree('user',list===('*')?[]:list,!custom)}</div>
+    </div></div>`;
+}
+function refreshUserAccess(){
+  const role=$('#f_role').value, admin=role===AUTH.ADMIN, mode=($('#mForm [name="accmode"]:checked')||{}).value;
+  $('#accAdmin').hidden=!admin; $('#accPick').hidden=admin; if(admin) return;
+  const custom=mode==='custom';
+  $('#accHint').textContent=custom?'Tick exactly what this person can open.':'Uses the role\'s access. Choose Custom access to change it for this person only.';
+  if(!custom){ $('#accTreeBox').innerHTML=accessTree('user',AUTH.roleAccess(role),true); }
+  else $('#accTreeBox').querySelectorAll('.acc,.acc-mod').forEach(i=>{ i.disabled=i.dataset.mod==='home'; });
+  syncMods($('#accTreeBox'));
+}
+function readUserAccess(){
+  if($('#f_role').value===AUTH.ADMIN) return null;
+  const mode=($('#mForm [name="accmode"]:checked')||{}).value; if(mode!=='custom') return null;
+  return accessKeys([...document.querySelectorAll('#accTreeBox .acc:checked')].map(i=>i.value));
 }
 function clientForm(c){
   const ed=!!c;
@@ -1011,6 +1059,7 @@ function render(){
   const fn=V[route.m+'.'+route.s]||V['home.dash'];
   $('#view').innerHTML=fn();
   if(route.s==='itemform') updateItemForm();
+  if(route.s==='roles') syncMods();
   document.title=(route.m==='home'?'':MOD[route.m].t+' · ')+'Warehouse Management System';
 }
 function runAct(name,id){ try{ ACT[name](id); }catch(e){ toast(e.message); } }
@@ -1038,8 +1087,8 @@ document.addEventListener('submit',e=>{
     try{ const r=formSubmit.onSubmit(readForm()); if(r&&r.then){ if(sb) sb.disabled=true; r.catch(fail).finally(()=>{ if(sb&&document.contains(sb)) sb.disabled=false; }); } }catch(err){ fail(err); } }
   if(e.target.id==='roleForm'){
     try{ adminOnly(); const by={};
-      e.target.querySelectorAll('.acc:not(:disabled)').forEach(i=>{ (by[i.dataset.role]=by[i.dataset.role]||[]); if(i.checked) by[i.dataset.role].push(i.value); });
-      Object.entries(by).forEach(([r,m])=>AUTH.setRoleAccess(r,m)); render(); toast('Permissions saved.');
+      e.target.querySelectorAll('.acc:not(:disabled)').forEach(i=>{ (by[i.dataset.g]=by[i.dataset.g]||[]); if(i.checked) by[i.dataset.g].push(i.value); });
+      Object.entries(by).forEach(([r,m])=>AUTH.setRoleAccess(r,accessKeys(m))); render(); toast('Permissions saved.');
     }catch(err){ toast(err.message); }
     return;
   }
@@ -1059,7 +1108,10 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{
   if(e.target.closest&&e.target.closest('#itemForm')){ updateItemForm(e.target); return; }
   const f=e.target.dataset.filt; if(f){ const [k,id]=f.split('.'); (filt[k]=filt[k]||{})[id]=e.target.value; render(); return; }
-  if(e.target.id==='f_role'&&$('#rolePrev')){ $('#rolePrev').innerHTML=roleSummaryLong(e.target.value); return; }
+  if(e.target.classList&&e.target.classList.contains('acc-mod')){ const g=e.target.dataset.g; document.querySelectorAll(`.acc[data-g="${CSS.escape(g)}"][data-mod="${e.target.dataset.mod}"]`).forEach(i=>{ if(!i.disabled) i.checked=e.target.checked; }); syncMods(); return; }
+  if(e.target.classList&&e.target.classList.contains('acc')){ syncMods(); return; }
+  if(e.target.name==='accmode'&&$('#accBox')){ refreshUserAccess(); return; }
+  if(e.target.id==='f_role'&&$('#accBox')){ refreshUserAccess(); return; }
   if(e.target.id==='f_client'){ const opts=lineItemOpts(); document.querySelectorAll('.line select[data-col="sku"]').forEach(s=>{ s.innerHTML=opts.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join(''); }); }
 });
 let qT; document.addEventListener('input',e=>{
@@ -1084,7 +1136,7 @@ $('#q').addEventListener('keydown',e=>{
 $('#signOut').addEventListener('click',()=>{ AUTH.signOut(); location.replace('login.html'); });
 // Another tab signed out (or in as someone else): follow it.
 // Session, user or role changes from another tab (or by an admin): follow them.
-function checkSession(){ const s=AUTH.get(); if(!s||s.id!==ME.id){ location.replace('login.html'); return; } if(s.role!==ME.role){ location.reload(); return; } fillUser(); renderSide(); }
+function checkSession(){ const s=AUTH.get(); if(!s||s.id!==ME.id){ location.replace('login.html'); return; } if(s.role!==ME.role||JSON.stringify(s.access)!==JSON.stringify(ME.access)){ location.reload(); return; } fillUser(); renderSide(); }
 function fillUser(){ const s=AUTH.get()||ME; $('#userName').textContent=s.name; $('#userRole').textContent=s.role+(s.title&&s.title!==s.role?' · '+s.title:'');
   $('#userAvatar').textContent=s.name.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
 window.addEventListener('storage',e=>{ if(e.key==='lanewms-session'||e.key==='lanewms-auth') checkSession(); });

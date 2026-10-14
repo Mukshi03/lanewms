@@ -73,7 +73,7 @@ const AUTH = (() => {
     db = readDb(); const r = rawSession(); if(!r || !db) return null;
     const u = db.users.find(x => x.id === r.v.id);
     if(!u || !u.active || !(r.v.exp > Date.now())){ try{ r.s.removeItem(SESSION); }catch(e){} return null; }
-    return {id:u.id, email:u.email, name:u.name, role:u.role, title:u.title || u.role, exp:r.v.exp};
+    return {id:u.id, email:u.email, name:u.name, role:u.role, title:u.title || u.role, exp:r.v.exp, access:accessOf(u), custom:Array.isArray(u.access) && u.role !== ADMIN};
   }
 
   async function signIn(email, password, remember){
@@ -92,11 +92,18 @@ const AUTH = (() => {
   function signOut(){ for(const s of stores()){ try{ s.removeItem(SESSION); }catch(e){} } }
 
   /* ---------- access ---------- */
-  function can(role, module){
-    const r = data() && data().roles[role]; if(!r) return false;
-    if(r.modules === '*') return true;
-    return !ADMIN_ONLY.includes(module) && r.modules.includes(module);
+  // An access list is '*' (everything) or an array of keys: 'inbound' = the whole module,
+  // 'inbound.asn' = one option inside it. Without an option, the check asks "can open any part of the module".
+  function hasAccess(list, module, option){
+    if(list === '*') return true;
+    if(!Array.isArray(list) || ADMIN_ONLY.includes(module)) return false;
+    if(list.includes(module)) return true;
+    return option ? list.includes(module + '.' + option) : list.some(k => k.startsWith(module + '.'));
   }
+  function roleAccess(role){ const r = data() && data().roles[role]; return r ? r.modules : []; }
+  // A user's access: Administrators get everything; others use their own custom list if set, otherwise their role's.
+  function accessOf(u){ const ra = roleAccess(u.role); return ra === '*' ? '*' : (Array.isArray(u.access) ? u.access : ra); }
+  function can(role, module, option){ return hasAccess(roleAccess(role), module, option); }
   const isAdmin = s => !!s && s.role === ADMIN;
 
   // Keep "next" to a same-page hash route so the redirect cannot be pointed at another site.
@@ -125,7 +132,7 @@ const AUTH = (() => {
     if(!id){
       checkPassword(d.password);
       if(d.password !== d.confirm) throw new Error('The two passwords do not match.');
-      const u = {id:'U-'+String(++data().seq).padStart(3,'0'), email, name, title:String(d.title||'').trim(), role:d.role,
+      const u = {id:'U-'+String(++data().seq).padStart(3,'0'), email, name, title:String(d.title||'').trim(), role:d.role, access:cleanAccess(d.access, d.role),
         pass:await hash(email, d.password), active:true, demo:false, created:new Date().toISOString(), lastLogin:null};
       data().users.push(u); writeDb(); return u;
     }
@@ -136,7 +143,7 @@ const AUTH = (() => {
       if(!d.password) throw new Error('Changing the email also needs a new password. Enter one below.');
     }
     if(d.password){ checkPassword(d.password); if(d.password !== d.confirm) throw new Error('The two passwords do not match.'); u.pass = await hash(email, d.password); u.demo = false; }
-    Object.assign(u, {email, name, title:String(d.title||'').trim(), role:d.role});
+    Object.assign(u, {email, name, title:String(d.title||'').trim(), role:d.role, access:cleanAccess(d.access, d.role)});
     writeDb(); return u;
   }
 
@@ -156,12 +163,16 @@ const AUTH = (() => {
     data().users = data().users.filter(x => x.id !== id); writeDb(); return u;
   }
 
+  // Home is always open; Settings is never given out. null = use the role's access.
+  function cleanList(keys){ return [...new Set(['home', ...(keys || []).filter(k => !ADMIN_ONLY.includes(String(k).split('.')[0]))])]; }
+  function cleanAccess(access, role){ return role === ADMIN || !Array.isArray(access) ? null : cleanList(access); }
+
   /* ---------- roles (Administrator) ---------- */
-  function setRoleAccess(role, modules){
+  function setRoleAccess(role, keys){
     requireAdmin();
     const r = data().roles[role]; if(!r) throw new Error('Role not found.');
     if(r.modules === '*') throw new Error('Administrators always have full access.');
-    r.modules = [...new Set(['home', ...modules.filter(m => !ADMIN_ONLY.includes(m))])];
+    r.modules = cleanList(keys);
     writeDb();
   }
   function addRole(name, copyFrom){
@@ -184,7 +195,7 @@ const AUTH = (() => {
   }
 
   return {
-    ADMIN, ADMIN_ONLY, ready, get, signIn, signOut, can, isAdmin, safeNext, requireSession,
+    ADMIN, ADMIN_ONLY, ready, get, signIn, signOut, can, hasAccess, roleAccess, isAdmin, safeNext, requireSession,
     users: () => (data() ? data().users.map(u => ({...u, pass:undefined})) : []),
     roles: () => (data() ? data().roles : {}),
     demoAccounts: () => DEMO.filter(a => (data()?.users || []).some(u => u.email === a.email && u.demo && u.active)),
