@@ -1,4 +1,4 @@
-# Gray Lane 3PL ERP (LaneWMS)
+# Warehouse Management System (LaneWMS)
 
 A browser-based prototype of a third-party logistics (3PL) warehouse and ERP system for a Saudi warehouse operator. It covers the whole flow from inbound receipt to tax invoice. It starts empty: the dashboard's **Get started** checklist walks you through adding a warehouse, bins, a client and items.
 

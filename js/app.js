@@ -1011,7 +1011,7 @@ function render(){
   const fn=V[route.m+'.'+route.s]||V['home.dash'];
   $('#view').innerHTML=fn();
   if(route.s==='itemform') updateItemForm();
-  document.title=(route.m==='home'?'':MOD[route.m].t+' · ')+'Gray Lane 3PL ERP';
+  document.title=(route.m==='home'?'':MOD[route.m].t+' · ')+'Warehouse Management System';
 }
 function runAct(name,id){ try{ ACT[name](id); }catch(e){ toast(e.message); } }
 document.addEventListener('click',e=>{
