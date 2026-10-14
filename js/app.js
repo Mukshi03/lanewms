@@ -15,14 +15,16 @@ const n0 = v => Number(v||0).toLocaleString('en-US');
 const sar = v => Number(v||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});
 const sum = (a,f) => a.reduce((t,x)=>t+(f?f(x):x),0);
 const VAT = 0.15;
-const KEY = 'lanewms-v1'; // own key, so it never clashes with other Gray Lane builds on the same site
+const KEY = 'lanewms-v2'; // own key, so it never clashes with other Gray Lane builds on the same site
+try{ localStorage.removeItem('lanewms-v1'); }catch(e){} // sample records from earlier versions
 
 /* ================= state ================= */
 let S;
 function blank(){
-  return {seq:{}, company:{name:'Gray Lane Logistics',vat:'[VAT number]',cr:'[CR number]',city:'Jeddah'},
+  return {seq:{}, company:{name:'Gray Lane Logistics',vat:'',cr:'',city:'Jeddah'},
     clients:[],warehouses:[],bins:[],items:[],asns:[],grns:[],tasks:[],stock:[],orders:[],moves:[],charges:[],invoices:[],
-    returns:[],vas:[],counts:[],zones:[],vehicles:[],drivers:[],trips:[],spaces:[],bookings:[],users:[],reasons:[],payments:[]};
+    returns:[],vas:[],counts:[],zones:[],vehicles:[],drivers:[],trips:[],spaces:[],bookings:[],users:[],payments:[],
+    reasons:['Damaged in warehouse','Count variance','Expired','Customer return','Supplier short shipment','QC rejection']};
 }
 function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
 function load(){ try{ const t = localStorage.getItem(KEY); return t ? JSON.parse(t) : null; }catch(e){ return null; } }
@@ -300,136 +302,8 @@ const OPS = {
   }
 };
 
-/* ================= seed (runs the real operations on back-dated sample records) ================= */
-function seed(){
-  S=blank();
-  const T=today(), d=n=>addDays(T,n);
-  S.clients=[
-    {id:'CL-001',name:'Red Sea Foods',industry:'Food & beverage',contact:'Faisal Al-Harbi',phone:'+966 5X XXX XXXX',vat:'[VAT]',rule:'FEFO',terms:30,sla:24,rates:{storage:4.5,inbound:12,outbound:3.5,order:8,vas:1.2,transport:85}},
-    {id:'CL-002',name:'Najd Electronics',industry:'Electronics',contact:'Sara Al-Qahtani',phone:'+966 5X XXX XXXX',vat:'[VAT]',rule:'FIFO',terms:45,sla:24,rates:{storage:3.8,inbound:10,outbound:3,order:6,vas:1.5,transport:95}},
-    {id:'CL-003',name:'Hijaz Pharma',industry:'Pharmaceutical',contact:'Omar Siddiqui',phone:'+966 5X XXX XXXX',vat:'[VAT]',rule:'FEFO',terms:30,sla:12,rates:{storage:6,inbound:15,outbound:4.5,order:10,vas:2,transport:120}},
-    {id:'CL-004',name:'Souq Style',industry:'E-commerce fashion',contact:'Lina Al-Zahrani',phone:'+966 5X XXX XXXX',vat:'[VAT]',rule:'FIFO',terms:30,sla:24,rates:{storage:3.5,inbound:9,outbound:2.5,order:5,vas:1,transport:70}}];
-  S.warehouses=[
-    {id:'WH-JED-01',name:'Jeddah Ambient',city:'Jeddah',type:'Ambient',capacity:24},
-    {id:'WH-JED-02',name:'Jeddah Chilled',city:'Jeddah',type:'Chilled',capacity:8},
-    {id:'WH-JED-03',name:'Jeddah Frozen',city:'Jeddah',type:'Frozen',capacity:6},
-    {id:'WH-RUH-01',name:'Riyadh Ambient',city:'Riyadh',type:'Ambient',capacity:10}];
-  const tempOf={'WH-JED-01':'Ambient','WH-JED-02':'Chilled','WH-JED-03':'Frozen','WH-RUH-01':'Ambient'};
-  for(const w of S.warehouses){
-    const n = w.capacity/2;
-    for(let i=0;i<n;i++){ const aisle=String.fromCharCode(65+Math.floor(i/6)); S.bins.push({code:`${aisle}-${String(i%6+1).padStart(2,'0')}`,wh:w.id,zone:'Storage',temp:tempOf[w.id],cap:2}); }
-    S.bins.push({code:'DOCK-IN',wh:w.id,zone:'Receiving',temp:'Any',cap:99},{code:'STAGE-OUT',wh:w.id,zone:'Staging',temp:'Any',cap:99},{code:'RET-01',wh:w.id,zone:'Returns',temp:'Any',cap:99},{code:'QA-HOLD',wh:w.id,zone:'Quarantine',temp:'Any',cap:99});
-  }
-  S.items=[
-    {sku:'RSF-RICE-5K',client:'CL-001',name:'Basmati rice 5 kg',uom:'Carton',temp:'Ambient',shelf:540,barcode:'628100000001'},
-    {sku:'RSF-OIL-1L',client:'CL-001',name:'Sunflower oil 1 L × 12',uom:'Carton',temp:'Ambient',shelf:365,barcode:'628100000002'},
-    {sku:'RSF-LAB-500',client:'CL-001',name:'Labneh 500 g × 6',uom:'Carton',temp:'Chilled',shelf:45,barcode:'628100000003'},
-    {sku:'RSF-SHR-1K',client:'CL-001',name:'Frozen shrimp 1 kg × 10',uom:'Carton',temp:'Frozen',shelf:270,barcode:'628100000004'},
-    {sku:'NJE-TV-55',client:'CL-002',name:'55" LED TV',uom:'Unit',temp:'Ambient',shelf:0,barcode:'628200000001'},
-    {sku:'NJE-AC-18',client:'CL-002',name:'Split AC 18,000 BTU',uom:'Unit',temp:'Ambient',shelf:0,barcode:'628200000002'},
-    {sku:'NJE-PHN-A5',client:'CL-002',name:'Smartphone A5 (carton of 20)',uom:'Carton',temp:'Ambient',shelf:0,barcode:'628200000003'},
-    {sku:'HJP-INS-10',client:'CL-003',name:'Insulin pens × 10',uom:'Box',temp:'Chilled',shelf:120,barcode:'628300000001'},
-    {sku:'HJP-PAR-24',client:'CL-003',name:'Paracetamol 500 mg × 24',uom:'Carton',temp:'Ambient',shelf:730,barcode:'628300000002'},
-    {sku:'SQS-ABY-M',client:'CL-004',name:'Abaya, black, size M',uom:'Piece',temp:'Ambient',shelf:0,barcode:'628400000001'},
-    {sku:'SQS-THB-L',client:'CL-004',name:'Thobe, white, size L',uom:'Piece',temp:'Ambient',shelf:0,barcode:'628400000002'},
-    {sku:'SQS-SHL-01',client:'CL-004',name:'Shemagh, red check',uom:'Piece',temp:'Ambient',shelf:0,barcode:'628400000003'}];
-  const meta={ // Arabic name, category, item group, packing, pallet conversion
-    'RSF-RICE-5K':['أرز بسمتي ٥ كغ','Groceries','Food - dry','4 × 5 kg per carton',40],
-    'RSF-OIL-1L':['زيت دوار الشمس ١ لتر × ١٢','Groceries','Food - dry','12 × 1 L per carton',50],
-    'RSF-LAB-500':['لبنة ٥٠٠ غ × ٦','Dairy','Food - chilled','6 × 500 g per carton',60],
-    'RSF-SHR-1K':['روبيان مجمد ١ كغ × ١٠','Seafood','Food - frozen','10 × 1 kg per carton',48],
-    'NJE-TV-55':['تلفزيون LED مقاس ٥٥ بوصة','Appliances','Electronics','1 unit per box',0],
-    'NJE-AC-18':['مكيف سبليت ١٨٠٠٠ وحدة حرارية','Appliances','Electronics','Indoor + outdoor unit',0],
-    'NJE-PHN-A5':['هاتف ذكي A5 (كرتون ٢٠)','Mobile phones','Electronics','20 units per carton',30],
-    'HJP-INS-10':['أقلام إنسولين × ١٠','Medicines','Pharmaceutical','10 pens per box',0],
-    'HJP-PAR-24':['باراسيتامول ٥٠٠ ملغ × ٢٤','Medicines','Pharmaceutical','24 packs per carton',60],
-    'SQS-ABY-M':['عباية سوداء مقاس M','Clothing','Apparel','Polybag, 1 piece',0],
-    'SQS-THB-L':['ثوب أبيض مقاس L','Clothing','Apparel','Polybag, 1 piece',0],
-    'SQS-SHL-01':['شماغ أحمر','Accessories','Apparel','Polybag, 1 piece',0]};
-  S.items.forEach(i=>{ const m=meta[i.sku]; i.name2=m[0]; i.category=m[1]; i.group=m[2]; i.packing=m[3]; i.conversions=m[4]?[{uom:'Pallet',factor:m[4]}]:[]; i.serial=/NJE-(TV|AC)/.test(i.sku); i.series='ITEM-.YYYY.-'; });
-  // one variant family as an example: Thobe in sizes S, M, L
-  const thl=S.items.find(i=>i.sku==='SQS-THB-L');
-  const tpl={...thl,sku:'SQS-THB',name:'Thobe, white',name2:'ثوب أبيض',variant:'template',attrName:'Size',barcode:''};
-  const mk=(sz,bc)=>({...thl,sku:'SQS-THB-'+sz,name:'Thobe, white - '+sz,name2:'ثوب أبيض مقاس '+sz,variant:'variant',parent:'SQS-THB',attr:{name:'Size',value:sz},barcode:bc});
-  Object.assign(thl,{name:'Thobe, white - L',variant:'variant',parent:'SQS-THB',attr:{name:'Size',value:'L'}});
-  S.items.splice(S.items.indexOf(thl),0,tpl,mk('S','628400000004'),mk('M','628400000005'));
-  normalizeItems();
-  S.vehicles=[{id:'VH-01',plate:'[Plate 1]',type:'6 m chiller truck',capacity:12},{id:'VH-02',plate:'[Plate 2]',type:'12 m flatbed',capacity:24},{id:'VH-03',plate:'[Plate 3]',type:'Van',capacity:4}];
-  S.drivers=[{id:'DR-01',name:'Driver A',phone:'+966 5X XXX XXXX'},{id:'DR-02',name:'Driver B',phone:'+966 5X XXX XXXX'},{id:'DR-03',name:'Driver C',phone:'+966 5X XXX XXXX'}];
-  S.users=[{name:'Admin',role:'Administrator',wh:'All'},{name:'Warehouse Supervisor',role:'Supervisor',wh:'WH-JED-01'},{name:'Picker 1',role:'Operator',wh:'WH-JED-01'},{name:'Picker 2',role:'Operator',wh:'WH-JED-02'},{name:'Finance Officer',role:'Finance',wh:'All'},{name:'Red Sea Foods portal',role:'Client user',wh:'CL-001'}];
-  S.reasons=['Damaged in warehouse','Count variance','Expired','Customer return','Supplier short shipment','QC rejection'];
-  S.spaces=[{id:'SP-01',wh:'WH-JED-01',type:'Ambient',city:'Jeddah',rate:4},{id:'SP-02',wh:'WH-JED-02',type:'Chilled',city:'Jeddah',rate:6},{id:'SP-03',wh:'WH-JED-03',type:'Frozen',city:'Jeddah',rate:8},{id:'SP-04',wh:'WH-RUH-01',type:'Ambient',city:'Riyadh',rate:3.6}];
-  S.zones=[{id:'TZ-01',wh:'WH-JED-02',name:'Chilled room C1',min:2,max:8,readings:[]},{id:'TZ-02',wh:'WH-JED-03',name:'Frozen room F1',min:-25,max:-18,readings:[]},{id:'TZ-03',wh:'WH-JED-01',name:'Ambient hall A',min:15,max:30,readings:[]}];
-  const now=Date.now();
-  for(let h=23;h>=0;h--){
-    const t=new Date(now-h*36e5).toISOString();
-    OPS.reading('TZ-01',(4.2+Math.sin(h/3)*1.3).toFixed(1),t);
-    OPS.reading('TZ-02',(h<2?-15.8:-20.5+Math.cos(h/4)*1.2).toFixed(1),t);
-    OPS.reading('TZ-03',(24+Math.sin(h/5)*3).toFixed(1),t);
-  }
-  // inbound history
-  const rx=(cl,w,day,lines,ref)=>{ const a=OPS.createASN({client:cl,wh:w,eta:d(day),ref,dock:'D'+(1+S.asns.length%4),lines},d(day-2)); OPS.receiveASN(a.id,d(day)); return a; };
-  const lots=[
-    ['CL-001','WH-JED-01',-24,[{sku:'RSF-RICE-5K',qty:80,batch:'R2408',expiry:d(300)},{sku:'RSF-RICE-5K',qty:80,batch:'R2409',expiry:d(330)},{sku:'RSF-OIL-1L',qty:60,batch:'O771',expiry:d(25)},{sku:'RSF-OIL-1L',qty:60,batch:'O802',expiry:d(200)}],'PO-55120'],
-    ['CL-001','WH-JED-02',-12,[{sku:'RSF-LAB-500',qty:120,batch:'L0931',expiry:d(9)},{sku:'RSF-LAB-500',qty:120,batch:'L1004',expiry:d(28)}],'PO-55188'],
-    ['CL-001','WH-JED-03',-20,[{sku:'RSF-SHR-1K',qty:50,batch:'S553',expiry:d(210)},{sku:'RSF-SHR-1K',qty:50,batch:'S560',expiry:d(240)}],'PO-55140'],
-    ['CL-002','WH-JED-01',-22,[{sku:'NJE-TV-55',qty:40,batch:'',expiry:''},{sku:'NJE-TV-55',qty:40,batch:'',expiry:''},{sku:'NJE-AC-18',qty:30,batch:'',expiry:''},{sku:'NJE-PHN-A5',qty:25,batch:'',expiry:''}],'IMP-2231'],
-    ['CL-002','WH-RUH-01',-15,[{sku:'NJE-AC-18',qty:30,batch:'',expiry:''},{sku:'NJE-AC-18',qty:30,batch:'',expiry:''},{sku:'NJE-TV-55',qty:40,batch:'',expiry:''}],'IMP-2240'],
-    ['CL-003','WH-JED-02',-18,[{sku:'HJP-INS-10',qty:200,batch:'IN-7781',expiry:d(21)},{sku:'HJP-INS-10',qty:200,batch:'IN-7802',expiry:d(95)}],'PH-0912'],
-    ['CL-003','WH-JED-01',-10,[{sku:'HJP-PAR-24',qty:150,batch:'PA-3310',expiry:d(600)},{sku:'HJP-PAR-24',qty:150,batch:'PA-3322',expiry:d(640)}],'PH-0920'],
-    ['CL-004','WH-JED-01',-16,[{sku:'SQS-ABY-M',qty:300,batch:'',expiry:''},{sku:'SQS-THB-L',qty:300,batch:'',expiry:''},{sku:'SQS-SHL-01',qty:400,batch:'',expiry:''}],'SS-PO-118'],
-    ['CL-004','WH-JED-01',-5,[{sku:'SQS-ABY-M',qty:300,batch:'',expiry:''},{sku:'SQS-THB-L',qty:200,batch:'',expiry:''}],'SS-PO-124']];
-  lots.forEach(l=>rx(...l));
-  // put away all but the most recent receipt
-  S.tasks.forEach(t=>{ const s=S.stock.find(x=>x.lpn===t.lpn); if(s.received<d(-5)) OPS.putaway(t.id,t.to,addDays(s.received,0),['Picker 1','Picker 2','Warehouse Supervisor'][S.tasks.indexOf(t)%3]); });
-  // outbound history
-  const ob=(cl,w,day,cust,lines,stage)=>{
-    const o=OPS.createOrder({client:cl,wh:w,customer:cust,due:d(day+1),lines},d(day));
-    try{ OPS.allocate(o.id); }catch(e){ return o; }
-    if(stage<1) return o; OPS.releasePick(o.id,d(day));
-    if(stage<2) return o; OPS.confirmPick(o.id,d(day),['Picker 1','Picker 2'][S.orders.length%2]);
-    if(stage<3) return o; OPS.dispatch(o.id,d(day));
-    if(stage<4) return o; OPS.deliver(o.id,'Store receiving',d(day+1)); return o;
-  };
-  const custs=['Panda Hypermarket #112','Danube Al-Rawdah','Tamimi Markets Olaya','eXtra Jeddah','Nahdi Pharmacy DC','Online customer'];
-  for(let day=-14;day<=-1;day++){
-    ob('CL-001','WH-JED-01',day,custs[(day+20)%3],[{sku:'RSF-RICE-5K',qty:8+(day%4+4)},{sku:'RSF-OIL-1L',qty:5+(day%3+3)}],4);
-    if(day%2===0) ob('CL-004','WH-JED-01',day,'Online customer',[{sku:'SQS-ABY-M',qty:12},{sku:'SQS-SHL-01',qty:20}],4);
-    if(day%3===0) ob('CL-002','WH-JED-01',day,'eXtra Jeddah',[{sku:'NJE-TV-55',qty:4},{sku:'NJE-AC-18',qty:2}],4);
-    if(day%4===0) ob('CL-003','WH-JED-02',day,'Nahdi Pharmacy DC',[{sku:'HJP-INS-10',qty:25}],4);
-  }
-  ob('CL-001','WH-JED-02',-1,'Danube Al-Rawdah',[{sku:'RSF-LAB-500',qty:30}],3);
-  ob('CL-003','WH-JED-01',0,'Nahdi Pharmacy DC',[{sku:'HJP-PAR-24',qty:40}],2);
-  ob('CL-004','WH-JED-01',0,'Online customer',[{sku:'SQS-THB-L',qty:15},{sku:'SQS-ABY-M',qty:6}],1);
-  ob('CL-002','WH-RUH-01',0,'eXtra Riyadh Olaya',[{sku:'NJE-AC-18',qty:10}],0);
-  ob('CL-001','WH-JED-01',-2,'Panda Hypermarket #112',[{sku:'RSF-OIL-1L',qty:20}],0);
-  OPS.createOrder({client:'CL-001',wh:'WH-JED-03',customer:'Tamimi Markets Olaya',due:d(1),lines:[{sku:'RSF-SHR-1K',qty:12}]},T);
-  OPS.createOrder({client:'CL-002',wh:'WH-JED-01',customer:'eXtra Jeddah',due:d(2),lines:[{sku:'NJE-PHN-A5',qty:30}]},T);
-  // expected inbound
-  OPS.createASN({client:'CL-001',wh:'WH-JED-01',eta:T,ref:'PO-55230',dock:'D2',lines:[{sku:'RSF-RICE-5K',qty:80,batch:'R2410',expiry:d(360)}]},d(-2));
-  OPS.createASN({client:'CL-003',wh:'WH-JED-02',eta:T,ref:'PH-0931',dock:'D3',lines:[{sku:'HJP-INS-10',qty:200,batch:'IN-7850',expiry:d(120)}]},d(-1));
-  OPS.createASN({client:'CL-002',wh:'WH-JED-01',eta:d(1),ref:'IMP-2252',dock:'D1',lines:[{sku:'NJE-PHN-A5',qty:40,batch:'',expiry:''},{sku:'NJE-TV-55',qty:40,batch:'',expiry:''}]},d(-1));
-  S.asns.filter(a=>a.status==='Expected').forEach((a,i)=>a.slot=['09:00','11:30','14:00'][i]);
-  // returns, vas, trips, counts, bookings
-  const del=S.orders.filter(o=>o.status==='Delivered'&&o.client==='CL-004');
-  if(del[0]){ const r=OPS.createReturn(del[0].id,[{sku:del[0].lines[0].sku,qty:2}],'Wrong size',d(-3)); OPS.inspectReturn(r.id,'Restock',d(-2)); }
-  if(del[1]) OPS.createReturn(del[1].id,[{sku:del[1].lines[0].sku,qty:1}],'Customer changed mind',d(-1));
-  const v1=OPS.createVAS({client:'CL-004',type:'Gift wrapping',sku:'SQS-SHL-01',qty:60,due:d(-4)},d(-6)); OPS.completeVAS(v1.id,d(-4));
-  OPS.createVAS({client:'CL-001',type:'Promo bundling',sku:'RSF-OIL-1L',qty:40,due:d(2)},d(-1));
-  OPS.createVAS({client:'CL-002',type:'Arabic relabelling',sku:'NJE-AC-18',qty:30,due:d(1)},T);
-  const disp=S.orders.filter(o=>o.status==='Dispatched').map(o=>o.id);
-  if(disp.length) OPS.createTrip({vehicle:'VH-01',driver:'DR-01',date:T,orders:disp});
-  OPS.createCount('WH-JED-01','A-01',d(-1));
-  OPS.book({company:'Al Waha Trading',type:'Ambient',pallets:40,from:d(10),months:6,contact:'procurement@[company].sa'},d(-2));
-  OPS.book({company:'Gulf Seafood Co.',type:'Frozen',pallets:8,from:d(5),months:3,contact:'ops@[company].sa'},d(-1));
-  // storage snapshots for the last 20 days (approximate: today's pallet count)
-  for(let day=-20;day<=-1;day++) OPS.captureStorage(d(day));
-  // last month's invoices
-  const inv1=OPS.billingRun('CL-002',d(-8)); OPS.issueInvoice(inv1.id,d(-7)); OPS.pay(inv1.id,inv1.total,d(-2));
-  const inv2=OPS.billingRun('CL-001',d(-8)); OPS.issueInvoice(inv2.id,d(-7));
-  const inv3=OPS.billingRun('CL-003',d(-8)); OPS.issueInvoice(inv3.id,d(-40)); inv3.due=d(-10);
-  save(); return S;
-}
+/* ================= fresh start (no sample records) ================= */
+function fresh(){ S=blank(); save(); return S; }
 
 /* ================= navigation map ================= */
 const IC={
@@ -575,10 +449,11 @@ V['home.dash']=()=>{
     ${days.map((d,i)=>`<rect x="${X(i)}" y="${Y(inU[i])}" width="24" height="${170-Y(inU[i])}" rx="2" fill="var(--accent)"><title>Received ${n0(inU[i])}</title></rect><rect x="${X(i)+26}" y="${Y(outU[i])}" width="24" height="${170-Y(outU[i])}" rx="2" fill="var(--accent-2)"><title>Shipped ${n0(outU[i])}</title></rect><text x="${X(i)+25}" y="190" text-anchor="middle">${new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'})}</text>`).join('')}
   </svg>`;
   return page('Operations Dashboard',`${allowed('inbound')?'<button class="btn" data-act="newASN">+ New ASN</button>':''}${allowed('orders')?'<button class="btn pri" data-act="newOrder">+ Outbound order</button>':''}`,`
+  ${setupCard()}
   <section class="grid g-kpi" aria-label="Key figures">
     ${kpi('Active clients',S.clients.length,`${S.items.length} SKUs under management`)}
     ${kpi('Pallets in stock',n0(pallets),`${n0(sum(S.stock,s=>s.qty))} units`)}
-    ${kpi('Space utilisation',Math.round(pallets/cap*100)+'%',`${pallets} of ${cap} pallet positions`,`<div class="bar"><i style="width:${Math.min(100,pallets/cap*100)}%"></i></div>`)}
+    ${kpi('Space utilisation',cap?Math.round(pallets/cap*100)+'%':'—',cap?`${pallets} of ${cap} pallet positions`:'No warehouses yet',`<div class="bar"><i style="width:${cap?Math.min(100,pallets/cap*100):0}%"></i></div>`)}
     ${kpi('Shipped today',shippedToday,`${dueToday.length} orders due today or tomorrow`)}
     ${kpi('On-time dispatch',closed.length?Math.round(ontime/closed.length*100)+'%':'—',`${ontime} of ${closed.length} orders by due date`)}
     ${allowed('billing')||allowed('finance')?kpi('Revenue this month',sar(monthCh),`SAR, ex VAT · ${sar(unbilled)} unbilled`):''}
@@ -589,11 +464,19 @@ V['home.dash']=()=>{
   </section>
   <section class="grid g-3">
     ${card('Alerts',alerts.length?alerts.map(a=>`<div class="alert">${pill(a.lvl)}<div><b>${esc(a.t)}</b><small>${esc(a.d)}</small></div></div>`).join(''):'<div class="empty">No alerts. Everything is within limits.</div>',`<span class="pill p-${alerts.some(a=>a.lvl==='High')?'bad':'mute'}">${alerts.length} open</span>`)}
-    ${card('Warehouse occupancy',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px">${S.warehouses.map(w=>{const p=palletsOf(w.id),pc=Math.round(p/w.capacity*100);return `<div><div class="row" style="justify-content:space-between"><span>${esc(w.name)}</span><b class="num">${pc}%</b></div><div class="bar"><i style="width:${Math.min(100,pc)}%;background:${pc>90?'var(--bad)':pc>80?'var(--accent-2)':'var(--accent)'}"></i></div><span class="note">${p} of ${w.capacity} pallets</span></div>`;}).join('')}<span class="note">Red above 90%, amber above 80%.</span></div>`,`<button class="btn sm" data-go="space.avail">Space</button>`)}
+    ${card('Warehouse occupancy',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px">${S.warehouses.length?'':'<span class="note">No warehouses yet. Add one under Master Data → Warehouses.</span>'}${S.warehouses.map(w=>{const p=palletsOf(w.id),pc=w.capacity?Math.round(p/w.capacity*100):0;return `<div><div class="row" style="justify-content:space-between"><span>${esc(w.name)}</span><b class="num">${pc}%</b></div><div class="bar"><i style="width:${Math.min(100,pc)}%;background:${pc>90?'var(--bad)':pc>80?'var(--accent-2)':'var(--accent)'}"></i></div><span class="note">${p} of ${w.capacity} pallets</span></div>`;}).join('')}<span class="note">Red above 90%, amber above 80%.</span></div>`,`<button class="btn sm" data-go="space.avail">Space</button>`)}
     ${!allowed('billing')?'':card('Billing',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px"><div class="dl"><div><span>Charges this month</span><b>${S.charges.filter(c=>c.at>=monthStart).length}</b></div><div><span>Invoices issued</span><b>${S.invoices.filter(v=>v.status!=='Draft').length}</b></div><div><span>Unbilled, SAR</span><b>${sar(unbilled)}</b></div><div><span>Overdue, SAR</span><b style="color:${overdue?'var(--bad)':'inherit'}">${sar(overdue)}</b></div></div>${mixBar()}<button class="btn sm pri" data-go="billing.run" style="align-self:flex-start">Run billing</button></div>`)}
   </section>
   ${card('Recent outbound orders',ordersTable(S.orders.slice().reverse().slice(0,6)),`<button class="btn sm" data-go="orders.all">All orders</button>`)}`,{tabs:false});
 };
+function setupCard(){
+  const steps=[['Add a warehouse','Sites, type and pallet capacity',S.warehouses.length>0,'master.wh'],
+    ['Add storage bins','Locations inside each warehouse',S.bins.some(b=>b.zone==='Storage'),'master.bins'],
+    ['Add a client','Company, contact and contract rates',activeClients().length>0,'clients.list'],
+    ['Add items','The products each client stores',S.items.length>0,'master.items']];
+  if(steps.every(x=>x[2])) return '';
+  return card('Get started',`<div class="card-b setup">${steps.map((x,i)=>`<div class="setup-step ${x[2]?'ok':''}"><span class="setup-n">${x[2]?'✓':i+1}</span><div><b>${x[0]}</b><small>${x[1]}</small></div>${x[2]?'<span class="note">Done</span>':allowed(x[3].split('.')[0])?`<button class="btn sm" data-go="${x[3]}">Open</button>`:''}</div>`).join('')}</div>`,`<span class="note">${steps.filter(x=>x[2]).length} of ${steps.length} done</span>`);
+}
 function mixBar(){
   const g={}; S.charges.forEach(c=>{ const k=c.type.startsWith('VAS')?'VAS':c.type==='Order fee'||c.type==='Handling out'||c.type==='Handling in'||c.type==='Returns handling'?'Handling':c.type; g[k]=(g[k]||0)+c.amount; });
   const tot=sum(Object.values(g))||1; const col={Storage:'var(--accent)',Handling:'var(--info)',Transport:'var(--accent-2)',VAS:'var(--faint)'};
@@ -813,7 +696,7 @@ V['outbound.pod']=()=>{ const rows=S.orders.filter(o=>['Dispatched','Delivered']
 /* --- returns, vas, cold, labour, space --- */
 V['returns.list']=()=>page('Returns',`<button class="btn pri" data-act="newReturn">+ New return</button>`,card('Return authorisations',table([{h:'RMA',v:r=>`<span class="mono">${r.id}</span>`},{h:'Order',v:r=>`<span class="mono">${r.order}</span>`},{h:'Client',v:r=>clName(r.client)},{h:'Items',v:r=>r.lines.map(l=>`${esc(l.sku)} × ${l.qty}${l.result?' → '+l.result:''}`).join('<br>')},{h:'Reason',v:r=>esc(r.reason)},{h:'Created',v:r=>fmtDate(r.created)},{h:'Status',v:r=>pill(r.status)},{h:'',v:r=>r.status==='Requested'?btn('Restock','inspect',r.id+'|Restock','pri')+' '+btn('Damaged','inspect',r.id+'|Damaged')+' '+btn('Dispose','inspect',r.id+'|Dispose','danger'):''}],S.returns.slice().reverse())));
 V['vas.list']=()=>page('Value-added services',`<button class="btn pri" data-act="newVAS">+ Work order</button>`,card('Work orders',table([{h:'Work order',v:v=>`<span class="mono">${v.id}</span>`},{h:'Client',v:v=>clName(v.client)},{h:'Service',v:v=>esc(v.type)},{h:'Item',v:v=>itemCell(v.sku)},{h:'Units',n:1,v:v=>n0(v.qty)},{h:'Due',v:v=>fmtDate(v.due)},{h:'Charge, SAR',n:1,v:v=>sar(v.qty*client(v.client).rates.vas)},{h:'Status',v:v=>pill(v.status)},{h:'',v:v=>v.status==='Open'?btn('Complete','vasDone',v.id,'pri'):''}],S.vas.slice().reverse())));
-V['cold.zones']=()=>page('Temperature zones','',`<div class="grid g-3">${S.zones.map(z=>{
+V['cold.zones']=()=>page('Temperature zones',`<button class="btn pri" data-act="newZone">+ Zone</button>`,`${S.zones.length?'':'<div class="card empty">No temperature zones yet. Add one for each chilled, frozen or ambient room you monitor.</div>'}<div class="grid g-3">${S.zones.map(z=>{
   const r=z.readings, last=r[r.length-1], bad=last&&(last.v<z.min||last.v>z.max);
   const lo=Math.min(z.min-2,...r.map(x=>x.v)), hi=Math.max(z.max+2,...r.map(x=>x.v)), Y=v=>90-(v-lo)/(hi-lo)*80, X=i=>i/(Math.max(1,r.length-1))*300;
   return card(esc(z.name),`<div class="card-b" style="display:flex;flex-direction:column;gap:10px"><div class="row" style="justify-content:space-between"><b style="font-size:26px;color:${bad?'var(--bad)':'var(--fg)'}">${last?last.v:'—'}°C</b><span class="note">Allowed ${z.min} to ${z.max}°C<br>${esc(wh(z.wh).name)}</span></div>
@@ -937,7 +820,7 @@ function clientBlockers(id){
   return b;
 }
 const clientHasHistory=id=>[S.orders,S.asns,S.charges,S.invoices,S.moves,S.returns,S.vas].some(a=>a.some(x=>x.client===id));
-V['settings.data']=()=>page('Data','',card('Prototype data',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px"><p style="margin:0">All records are sample data stored in this browser only. Other people opening this page see their own copy. Nothing is sent to a server.</p><div class="dl"><div><span>Clients</span><b>${S.clients.length}</b></div><div><span>Pallets</span><b>${S.stock.length}</b></div><div><span>Orders</span><b>${S.orders.length}</b></div><div><span>Ledger entries</span><b>${S.moves.length}</b></div><div><span>Charges</span><b>${S.charges.length}</b></div><div><span>Invoices</span><b>${S.invoices.length}</b></div></div><div class="row"><button class="btn danger" data-act="reset">Reset to fresh sample data</button></div><div id="resetBox"></div></div>`));
+V['settings.data']=()=>page('Data','',card('Stored data',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px"><p style="margin:0">All records are stored in this browser only. Other people opening this page see their own copy. Nothing is sent to a server.</p><div class="dl"><div><span>Clients</span><b>${S.clients.length}</b></div><div><span>Pallets</span><b>${S.stock.length}</b></div><div><span>Orders</span><b>${S.orders.length}</b></div><div><span>Ledger entries</span><b>${S.moves.length}</b></div><div><span>Charges</span><b>${S.charges.length}</b></div><div><span>Invoices</span><b>${S.invoices.length}</b></div></div><div class="row"><button class="btn danger" data-act="reset">Clear all data</button></div><div id="resetBox"></div></div>`));
 
 /* ================= detail views ================= */
 const DETAIL={
@@ -1059,6 +942,7 @@ const ACT={
   inspect(key){ const [id,dec]=key.split('|'); OPS.inspectReturn(id,dec); done(id+' closed as '+dec.toLowerCase()+'.'); },
   newVAS(){ form('New VAS work order',[{id:'client',label:'Client',type:'select',options:clientOpts()},{id:'type',label:'Service',type:'select',options:['Kitting','Promo bundling','Arabic relabelling','Gift wrapping','Repacking','Shrink wrapping'].map(x=>[x,x])},{id:'sku',label:'Item',type:'select',options:S.items.filter(stockable).map(i=>[i.sku,i.sku+' · '+client(i.client).name])},{id:'qty',label:'Units',type:'number',value:50,min:1,req:1},{id:'due',label:'Due',type:'date',value:addDays(today(),2)}],v=>{ if(item(v.sku).client!==v.client) throw new Error('That item belongs to another client.'); const w=OPS.createVAS(v); done(w.id+' created.'); },'Create'); },
   vasDone(id){ OPS.completeVAS(id); done(id+' completed and charged.'); },
+  newZone(){ if(!S.warehouses.length) throw new Error('Add a warehouse first.'); form('New temperature zone',[{id:'wh',label:'Warehouse',type:'select',options:whOpts()},{id:'name',label:'Zone name',value:'Chilled room 1',req:1},{id:'min',label:'Lowest allowed, °C',type:'number',step:'0.1',value:2,req:1},{id:'max',label:'Highest allowed, °C',type:'number',step:'0.1',value:8,req:1}],v=>{ if(!(+v.min<+v.max)) throw new Error('The lowest temperature must be below the highest.'); S.zones.push({id:nid('TZ',2),wh:v.wh,name:v.name,min:+v.min,max:+v.max,readings:[]}); done(v.name+' added. Log readings from its card.'); },'Add zone'); },
   reading(id){ const z=S.zones.find(x=>x.id===id); form('Log reading · '+z.name,[{id:'v',label:'Temperature, °C',type:'number',step:'0.1',value:'',req:1}],v=>{ OPS.reading(id,v.v); done('Reading saved.'); }); },
   newTrip(){ const os=S.orders.filter(o=>o.status==='Dispatched'&&!o.trip); form('Plan trip',[{id:'vehicle',label:'Vehicle',type:'select',options:S.vehicles.map(v=>[v.id,v.type+' · '+v.plate])},{id:'driver',label:'Driver',type:'select',options:S.drivers.map(d=>[d.id,d.name])},{id:'date',label:'Date',type:'date',value:today()},{id:'orders',label:'Dispatched orders without a trip',type:'checks',options:os.map(o=>[o.id,`${o.id} · ${o.customer}`])}],v=>{ const t=OPS.createTrip(v); done(t.id+' planned with '+t.orders.length+' drops.'); },'Plan trip'); },
   tripGo(id){ OPS.startTrip(id); done(id+' is out for delivery.'); },
@@ -1085,7 +969,7 @@ const ACT={
   newItem(){ itemEdit=null; go('master','itemform'); },
   editItem(sku){ itemEdit=sku; go('master','itemform'); },
   addConv(){ $('#convRows').insertAdjacentHTML('beforeend',convRow({},$('#it_uom').value)); $('#convRows').lastElementChild.querySelector('select').focus(); },
-  newWH(){ form('New warehouse',[{id:'id',label:'Code',value:'WH-DMM-01',req:1},{id:'name',label:'Name',req:1},{id:'city',label:'City'},{id:'type',label:'Type',type:'select',options:['Ambient','Chilled','Frozen','Bonded'].map(x=>[x,x])},{id:'capacity',label:'Capacity, pallets',type:'number',value:100,req:1}],v=>{ if(S.warehouses.some(w=>w.id===v.id)) throw new Error('Code already used.'); S.warehouses.push({...v,capacity:+v.capacity}); ['DOCK-IN','STAGE-OUT','RET-01','QA-HOLD'].forEach(c=>S.bins.push({code:c,wh:v.id,zone:c==='DOCK-IN'?'Receiving':c==='STAGE-OUT'?'Staging':c==='RET-01'?'Returns':'Quarantine',temp:'Any',cap:99})); S.spaces.push({id:'SP-'+v.id,wh:v.id,type:v.type,city:v.city,rate:4}); done(v.name+' added. Add storage bins next.'); },'Add'); },
+  newWH(){ form('New warehouse',[{id:'id',label:'Code',value:'WH-DMM-01',req:1},{id:'name',label:'Name',req:1},{id:'city',label:'City'},{id:'type',label:'Type',type:'select',options:['Ambient','Chilled','Frozen','Bonded'].map(x=>[x,x])},{id:'capacity',label:'Capacity, pallets',type:'number',value:100,req:1}],v=>{ v.id=v.id.toUpperCase(); if(S.warehouses.some(w=>w.id===v.id)) throw new Error('Code already used.'); if(!(+v.capacity>0)) throw new Error('Enter a capacity above 0 pallets.'); S.warehouses.push({...v,capacity:+v.capacity}); ['DOCK-IN','STAGE-OUT','RET-01','QA-HOLD'].forEach(c=>S.bins.push({code:c,wh:v.id,zone:c==='DOCK-IN'?'Receiving':c==='STAGE-OUT'?'Staging':c==='RET-01'?'Returns':'Quarantine',temp:'Any',cap:99})); S.spaces.push({id:'SP-'+v.id,wh:v.id,type:v.type,city:v.city,rate:4}); done(v.name+' added. Add storage bins next.'); },'Add'); },
   newBin(){ form('New bin',[{id:'wh',label:'Warehouse',type:'select',options:whOpts()},{id:'code',label:'Bin code',req:1},{id:'zone',label:'Zone',value:'Storage'},{id:'temp',label:'Temperature',type:'select',options:['Ambient','Chilled','Frozen','Any'].map(x=>[x,x])},{id:'cap',label:'Pallet capacity',type:'number',value:2}],v=>{ v.code=v.code.toUpperCase(); if(S.bins.some(b=>b.wh===v.wh&&b.code===v.code)) throw new Error('Bin already exists.'); S.bins.push({...v,cap:+v.cap}); done('Bin '+v.code+' added.'); },'Add'); },
   newVehicle(){ form('New vehicle',[{id:'plate',label:'Plate',req:1},{id:'type',label:'Type',value:'Van'},{id:'capacity',label:'Pallets',type:'number',value:4}],v=>{ S.vehicles.push({id:'VH-'+String(S.vehicles.length+1).padStart(2,'0'),...v,capacity:+v.capacity}); done('Vehicle added.'); }); },
   newDriver(){ form('New driver',[{id:'name',label:'Name',req:1},{id:'phone',label:'Phone'}],v=>{ S.drivers.push({id:'DR-'+String(S.drivers.length+1).padStart(2,'0'),...v}); done('Driver added.'); }); },
@@ -1117,8 +1001,8 @@ const ACT={
     const fallback=()=>modal('CSV',`<p class="note" style="margin:0">Select all and copy.</p><textarea class="mono" rows="12" style="width:100%" readonly>${esc(csv)}</textarea>`);
     try{ navigator.clipboard.writeText(csv).then(()=>toast('Copied '+(rows.length-1)+' rows. Paste into Excel.'),fallback); }catch(e){ fallback(); }
   },
-  reset(){ $('#resetBox').innerHTML=`<div class="row"><span>This replaces every record with fresh sample data.</span><button class="btn danger" data-act="resetYes">Yes, reset</button></div>`; },
-  resetYes(){ seed(); done('Fresh sample data loaded.'); }
+  reset(){ $('#resetBox').innerHTML=`<div class="row"><span>This deletes every client, warehouse, item, order and invoice in this browser. Users and roles are kept. It cannot be undone.</span><button class="btn danger" data-act="resetYes">Yes, clear all data</button></div>`; },
+  resetYes(){ adminOnly(); fresh(); done('All data cleared.'); }
 };
 
 /* ================= rendering + events ================= */
@@ -1209,10 +1093,10 @@ window.addEventListener('storage',e=>{ if(e.key==='lanewms-session'||e.key==='la
 if(ME){
   fillUser();
   S=load();
-  if(!S||!S.clients||!S.clients.length) seed(); else { normalizeItems(); save(); }
+  if(!S||!Array.isArray(S.clients)) fresh(); else { normalizeItems(); save(); }
   parseHash();
   try{ history.replaceState(null,'','#'+route.m+'.'+route.s); }catch(e){}
   try{ render(); }
-  catch(err){ console.error(err); seed(); route={m:'home',s:'dash'}; render(); toast('Saved data could not be read, so fresh sample data was loaded.'); }
+  catch(err){ console.error(err); fresh(); route={m:'home',s:'dash'}; render(); toast('Saved data could not be read, so the app was started empty.'); }
   setInterval(checkSession,60000); // session expiry and admin changes
 }

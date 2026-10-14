@@ -1,6 +1,6 @@
 # Gray Lane 3PL ERP (LaneWMS)
 
-A browser-based prototype of a third-party logistics (3PL) warehouse and ERP system for a Saudi warehouse operator. It covers the whole flow from inbound receipt to tax invoice, with sample data for four clients across Jeddah and Riyadh warehouses.
+A browser-based prototype of a third-party logistics (3PL) warehouse and ERP system for a Saudi warehouse operator. It covers the whole flow from inbound receipt to tax invoice. It starts empty: the dashboard's **Get started** checklist walks you through adding a warehouse, bins, a client and items.
 
 No build step, no backend and no dependencies: plain HTML, CSS and JavaScript.
 
@@ -62,7 +62,7 @@ Default role access:
 
 ## Data
 
-All records are sample data stored in the browser's `localStorage` (key `lanewms-v1`). Each visitor gets their own copy and nothing is sent to a server. Use **Settings → Data → Reset** to reload fresh sample data.
+Records are stored in the browser's `localStorage` (key `lanewms-v2`). Each visitor has their own copy and nothing is sent to a server. Administrators can delete everything with **Settings → Data → Clear all data**; users and roles are kept. Sample records saved by earlier versions are removed automatically.
 
 ## Prototype limits
 
