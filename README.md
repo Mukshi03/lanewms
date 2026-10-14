@@ -60,6 +60,10 @@ Default role access:
 
 **This is not security.** The site is static: users, roles and password hashes are saved in each browser's `localStorage`, so users created on one computer do not exist on another, and anyone can read the code. It shows how roles and administration work. For a real team, move sign-in and user storage to a backend, for example Supabase Auth or Firebase Authentication.
 
+## Publishing changes
+
+`index.html` and `login.html` load the CSS and JavaScript with a version number, for example `js/app.js?v=20261014-2`. When you change a CSS or JS file, change that number in both HTML files so browsers fetch the new files instead of using saved copies.
+
 ## Data
 
 Records are stored in the browser's `localStorage` (key `lanewms-v2`). Each visitor has their own copy and nothing is sent to a server. Administrators can delete everything with **Settings → Data → Clear all data**; users and roles are kept. Sample records saved by earlier versions are removed automatically.
