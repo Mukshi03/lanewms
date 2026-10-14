@@ -474,7 +474,7 @@ const NAV=[
     {id:'billing',t:'3PL Billing',subs:[['charges','Service charges'],['storage','Storage capture'],['run','Billing run']]},
     {id:'finance',t:'Finance & ZATCA',subs:[['inv','Invoices'],['pay','Payments'],['zatca','ZATCA log'],['ageing','Receivables ageing'],['vat','VAT summary']]},
     {id:'reports',t:'Reports & Analytics',subs:[['bal','Stock balance'],['thru','Throughput'],['client','Client profitability'],['sla','SLA']]},
-    {id:'settings',t:'Settings',subs:[['company','Company'],['users','Users & roles'],['data','Data']]}]}
+    {id:'settings',t:'Settings',subs:[['company','Company'],['users','Users & access'],['roles','Roles & permissions'],['data','Data']]}]}
 ];
 const MOD={}; NAV.forEach(g=>g.m.forEach(m=>MOD[m.id]=m));
 let route={m:'home',s:'dash'}, openMods=new Set(['home']), filt={};
@@ -530,7 +530,10 @@ function filterBar(key,opts){
     return `<select data-filt="${key}.${o.id}" aria-label="${o.label}"><option value="">${o.label}: all</option>${o.options.map(([v,t])=>`<option value="${esc(v)}" ${f[o.id]===v?'selected':''}>${esc(t)}</option>`).join('')}</select>`;
   }).join('')}</div>`;
 }
-const clientOpts=()=>S.clients.map(c=>[c.id,c.name]);
+const activeClients=()=>S.clients.filter(c=>!c.archived);
+const clientOpts=()=>activeClients().map(c=>[c.id,c.name]);
+const isAdminNow=()=>AUTH.isAdmin(AUTH.get());
+function adminOnly(){ if(!isAdminNow()) throw new Error('Only an Administrator can do this.'); }
 const whOpts=()=>S.warehouses.map(w=>[w.id,w.name]);
 const applyFilt=(key,rows,map)=>{ const f=filt[key]||{}; return rows.filter(r=>Object.entries(f).every(([k,v])=>!v||(map[k]?map[k](r,v):String(r[k])===v))); };
 const palletsOf=w=>S.stock.filter(s=>s.wh===w).length;
@@ -612,15 +615,19 @@ function buildAlerts(){
 STATUS_TONE.High='bad'; STATUS_TONE.Medium='warn'; STATUS_TONE.Info='info';
 
 /* --- clients --- */
-V['clients.list']=()=>page('Clients',`<button class="btn pri" data-act="newClient">+ New client</button>`,card(`${S.clients.length} clients`,table([
+V['clients.list']=()=>{ const adm=isAdminNow(), arch=S.clients.filter(c=>c.archived);
+  return page('Clients',adm?`<button class="btn pri" data-act="newClient">+ New client</button>`:'',card(`${activeClients().length} clients`,table([
   {h:'Client',v:c=>`<b>${esc(c.name)}</b><br><span class="note">${c.id}</span>`},{h:'Industry',v:c=>esc(c.industry)},{h:'Contact',v:c=>esc(c.contact)},
   {h:'Pick rule',v:c=>esc(c.rule)},{h:'SKUs',n:1,v:c=>S.items.filter(i=>i.client===c.id).length},{h:'Pallets',n:1,v:c=>S.stock.filter(s=>s.client===c.id).length},
   {h:'Open orders',n:1,v:c=>S.orders.filter(o=>o.client===c.id&&!['Delivered','Cancelled','Dispatched'].includes(o.status)).length},
-  {h:'Unbilled, SAR',n:1,v:c=>sar(sum(S.charges.filter(x=>x.client===c.id&&!x.invoice),x=>x.amount))}],S.clients,{click:'client'})));
+  {h:'Unbilled, SAR',n:1,v:c=>sar(sum(S.charges.filter(x=>x.client===c.id&&!x.invoice),x=>x.amount))},
+  ...(adm?[{h:'',v:c=>`<div class="row">${btn('Edit','editClient',c.id)}${btn('Remove','removeClient',c.id,'danger')}</div>`}]:[])],activeClients(),{click:'client'}))
+  +(arch.length?card(`${arch.length} archived`,table([{h:'Client',v:c=>`<b>${esc(c.name)}</b><br><span class="note">${c.id}</span>`},{h:'Industry',v:c=>esc(c.industry)},{h:'Archived',v:c=>fmtDate(c.archivedAt)},
+    ...(adm?[{h:'',v:c=>btn('Restore','restoreClient',c.id)}]:[])],arch))+`<p class="note">Archived clients are hidden from lists and new records. Their orders, invoices and reports are kept.</p>`:'')); };
 V['clients.rates']=()=>page('Rate cards','',card('Contract rates per client (SAR, ex VAT)',table([
   {h:'Client',v:c=>`<b>${esc(c.name)}</b>`},{h:'Storage / pallet / day',n:1,v:c=>sar(c.rates.storage)},{h:'Inbound / pallet',n:1,v:c=>sar(c.rates.inbound)},
   {h:'Outbound / pick line',n:1,v:c=>sar(c.rates.outbound)},{h:'Order fee',n:1,v:c=>sar(c.rates.order)},{h:'VAS / unit',n:1,v:c=>sar(c.rates.vas)},{h:'Transport / drop',n:1,v:c=>sar(c.rates.transport)},
-  {h:'Terms',v:c=>c.terms+' days'},{h:'',v:c=>btn('Edit rates','editRates',c.id)}],S.clients))+`<p class="note">Every warehouse event uses these rates to create a service charge automatically. Changing a rate affects new charges only.</p>`);
+  {h:'Terms',v:c=>c.terms+' days'},{h:'',v:c=>btn('Edit rates','editRates',c.id)}],activeClients()))+`<p class="note">Every warehouse event uses these rates to create a service charge automatically. Changing a rate affects new charges only.</p>`);
 V['clients.portal']=()=>page('Client users','',card('Portal access',table([{h:'User',v:u=>esc(u.name)},{h:'Client',v:u=>clName(u.wh)},{h:'Can see',v:()=>'Own stock, orders, ASNs, invoices'}],S.users.filter(u=>u.role==='Client user')))+`<p class="note">The client portal (separate login where clients see stock and place orders) is planned as its own app. These records set who gets access.</p>`);
 
 /* --- master --- */
@@ -863,7 +870,73 @@ V['reports.sla']=()=>{ const rows=S.clients.map(c=>{const os=S.orders.filter(o=>
 
 /* --- settings --- */
 V['settings.company']=()=>page('Company','',card('Company details',`<form class="card-b" id="coForm" style="display:flex;flex-direction:column;gap:12px"><div class="fgrid">${[['name','Company name'],['vat','VAT registration number'],['cr','Commercial registration'],['city','City']].map(([k,l])=>`<label class="field" for="co_${k}">${l}<input id="co_${k}" name="${k}" value="${esc(S.company[k])}"></label>`).join('')}</div><div><button class="btn pri" type="submit">Save</button></div></form>`));
-V['settings.users']=()=>page('Users & roles',`<button class="btn pri" data-act="newUser">+ User</button>`,card('Users',table([{h:'Name',v:u=>esc(u.name)},{h:'Role',v:u=>esc(u.role)},{h:'Scope',v:u=>esc(u.wh)}],S.users))+card('What each role can do',table([{h:'Role',v:r=>r[0]},{h:'Access',v:r=>r[1]}],[['Administrator','Everything, including settings and rates'],['Supervisor','All warehouse modules for assigned sites; approves adjustments'],['Operator','Receiving, putaway, picking, counts (mobile app)'],['Finance','Billing, invoices, payments, reports'],['Client user','Portal only: own stock, orders, ASNs, invoices']])));
+const fmtDateTime=d=>d?new Date(d).toLocaleString('en-GB',{day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'—';
+const allMods=()=>NAV.flatMap(g=>g.m);
+const roleMods=role=>allMods().filter(m=>AUTH.can(role,m.id));
+const roleSummary=role=>{ const r=AUTH.roles()[role]; if(!r) return '—'; if(r.modules==='*') return '<span class="pill p-info">Full access</span>';
+  const ms=roleMods(role); return `<span title="${esc(ms.map(m=>m.t).join(', '))}">${ms.length} of ${allMods().length} modules</span>`; };
+const roleSummaryLong=role=>{ const r=AUTH.roles()[role]; if(!r) return ''; return r.modules==='*'?'Full access to every module, including Settings (users, roles and company).':'Can open: '+roleMods(role).map(m=>esc(m.t)).join(', ')+'.'; };
+V['settings.users']=()=>{ const us=AUTH.users(), roles=AUTH.roles();
+  return page('Users & access',`<button class="btn pri" data-act="newUser">+ New user</button>`,
+  `<p class="note" style="margin:0"><span class="sim">PROTOTYPE</span> Users and passwords are saved in this browser only. A shared team setup needs a sign-in server.</p>`+
+  `<div class="grid g-kpi">${[['Users',us.length],['Active',us.filter(u=>u.active).length],['Administrators',us.filter(u=>u.active&&u.role===AUTH.ADMIN).length],['Roles',Object.keys(roles).length]].map(k=>`<div class="card kpi"><span>${k[0]}</span><b>${k[1]}</b></div>`).join('')}</div>`+
+  card(`${us.length} users`,table([
+    {h:'Name',v:u=>`<b>${esc(u.name)}</b>${u.id===ME.id?' <span class="pill p-info">You</span>':''}${u.title?`<br><span class="note">${esc(u.title)}</span>`:''}`},
+    {h:'Email',v:u=>`<span class="mono">${esc(u.email)}</span>`},
+    {h:'Role',v:u=>esc(u.role)},
+    {h:'Can open',v:u=>roleSummary(u.role)},
+    {h:'Last sign-in',v:u=>u.lastLogin?fmtDateTime(u.lastLogin):'<span class="note">Never</span>'},
+    {h:'Status',v:u=>u.active?'<span class="pill p-good">Active</span>':'<span class="pill p-mute">Deactivated</span>'},
+    {h:'',v:u=>`<div class="row">${btn('Edit','editUser',u.id)}${u.id===ME.id?'':btn(u.active?'Deactivate':'Activate','toggleUser',u.id)+btn('Delete','delUser',u.id,'danger')}</div>`}],us),
+    `<button class="btn sm" data-go="settings.roles">Roles & permissions</button>`)); };
+V['settings.roles']=()=>{ const roles=AUTH.roles(), names=Object.keys(roles), us=AUTH.users();
+  const mods=allMods().filter(m=>!AUTH.ADMIN_ONLY.includes(m.id));
+  const head=names.map(r=>`<th class="mx-c">${esc(r)}<br><span class="note">${us.filter(u=>u.role===r).length} users</span>${roles[r].builtin?'':`<br><button type="button" class="btn sm danger" data-act="delRole" data-id="${esc(r)}" style="margin-top:4px">Delete</button>`}</th>`).join('');
+  const rows=mods.map(m=>`<tr><td><b>${esc(m.t)}</b><br><span class="note">${m.subs.map(x=>esc(x[1])).join(', ')}</span></td>${names.map(r=>{ const all=roles[r].modules==='*', on=all||roles[r].modules.includes(m.id), lock=all||m.id==='home';
+    return `<td class="mx-c"><input type="checkbox" class="acc" data-role="${esc(r)}" value="${m.id}" ${on?'checked':''} ${lock?'disabled':''} aria-label="${esc(r)} can open ${esc(m.t)}"></td>`; }).join('')}</tr>`).join('');
+  const setRow=`<tr><td><b>Settings</b><br><span class="note">Company, users, roles, data</span></td>${names.map(r=>`<td class="mx-c">${roles[r].modules==='*'?'<span class="pill p-good">Yes</span>':'<span class="note">Admin only</span>'}</td>`).join('')}</tr>`;
+  return page('Roles & permissions',`<button class="btn" data-act="newRole">+ New role</button><button class="btn pri" type="submit" form="roleForm">Save permissions</button>`,
+    `<p class="note" style="margin:0">Tick the modules each role can open, then save. Administrators always have full access, and only Administrators can open Settings. Changes apply to signed-in users straight away.</p>`+
+    card('Module access by role',`<form id="roleForm"><div class="tbl-wrap"><table class="matrix"><thead><tr><th>Module</th>${head}</tr></thead><tbody>${rows}${setRow}</tbody></table></div></form>`)); };
+function userForm(u){
+  const ed=!!u, roles=Object.keys(AUTH.roles()), role=ed?u.role:(roles.includes('Operator')?'Operator':roles[0]);
+  form(ed?'Edit user · '+u.name:'New user',[
+    {id:'name',label:'Full name',value:ed?u.name:'',req:1},
+    {id:'email',label:'Email (used to sign in)',type:'email',value:ed?u.email:'',req:1},
+    {id:'title',label:'Job title',value:ed?u.title:''},
+    {id:'role',label:'Role',type:'select',options:roles.map(r=>[r,r]),value:role},
+    {type:'html',html:`<div id="rolePrev" class="note">${roleSummaryLong(role)}</div>`},
+    {id:'password',label:ed?'New password (leave blank to keep)':'Password',type:'password',req:!ed},
+    {id:'confirm',label:'Confirm password',type:'password',req:!ed},
+    {type:'html',html:'<p class="note" style="margin:0">At least 8 characters, with at least one letter and one number.'+(ed?' Changing the email also needs a new password.':'')+'</p>'}],
+    async v=>{ const saved=await AUTH.saveUser(v,ed?u.id:null);
+      if(saved.id===ME.id&&saved.role!==ME.role){ location.reload(); return; }
+      if(saved.id===ME.id) fillUser();
+      done(ed?`${saved.name} updated.`:`${saved.name} can now sign in as ${saved.role}.`); }, ed?'Save changes':'Create user');
+}
+function clientForm(c){
+  const ed=!!c;
+  form(ed?'Edit client · '+c.name:'New client',[{id:'name',label:'Company name',value:ed?c.name:'',req:1},{id:'industry',label:'Industry',value:ed?c.industry:''},{id:'contact',label:'Contact person',value:ed?c.contact:''},{id:'phone',label:'Phone',value:ed?c.phone:''},{id:'vat',label:'VAT number',value:ed?c.vat:''},
+    ...(ed?[]:[{id:'rule',label:'Pick rule',type:'select',options:[['FEFO','FEFO'],['FIFO','FIFO']]},{id:'terms',label:'Payment terms, days',type:'number',value:30,min:0},{id:'storage',label:'Storage / pallet / day, SAR',type:'number',value:4,step:'0.01'},{id:'inbound',label:'Inbound / pallet, SAR',type:'number',value:10,step:'0.01'},{id:'outbound',label:'Outbound / pick line, SAR',type:'number',value:3,step:'0.01'},{id:'order',label:'Order fee, SAR',type:'number',value:6,step:'0.01'},{id:'vas',label:'VAS / unit, SAR',type:'number',value:1,step:'0.01'},{id:'transport',label:'Transport / drop, SAR',type:'number',value:90,step:'0.01'}])],
+    v=>{ adminOnly();
+      if(S.clients.some(x=>x!==c&&!x.archived&&x.name.trim().toLowerCase()===v.name.toLowerCase())) throw new Error('A client called '+v.name+' already exists.');
+      if(ed){ Object.assign(c,{name:v.name,industry:v.industry,contact:v.contact,phone:v.phone,vat:v.vat}); return done(v.name+' updated.'); }
+      const id='CL-'+String(Math.max(0,...S.clients.map(x=>+x.id.slice(3)||0))+1).padStart(3,'0');
+      S.clients.push({id,name:v.name,industry:v.industry,contact:v.contact,phone:v.phone,vat:v.vat,rule:v.rule,terms:+v.terms||30,sla:24,rates:{storage:+v.storage,inbound:+v.inbound,outbound:+v.outbound,order:+v.order,vas:+v.vas,transport:+v.transport}});
+      done(v.name+' added as '+id+'.'); }, ed?'Save changes':'Add client');
+}
+function clientBlockers(id){
+  const b=[], n=(k,t)=>{ if(k) b.push(k+' '+t); };
+  n(S.stock.filter(s=>s.client===id).length,'pallet(s) in stock');
+  n(S.orders.filter(o=>o.client===id&&!['Delivered','Cancelled'].includes(o.status)).length,'open order(s)');
+  n(S.asns.filter(a=>a.client===id&&a.status==='Expected').length,'expected ASN(s)');
+  n(S.charges.filter(c=>c.client===id&&!c.invoice).length,'unbilled charge(s)');
+  n(S.invoices.filter(v=>v.client===id&&v.status!=='Paid').length,'draft or unpaid invoice(s)');
+  n(S.returns.filter(r=>r.client===id&&r.status==='Requested').length,'open return(s)');
+  n(S.vas.filter(v=>v.client===id&&v.status==='Open').length,'open VAS work order(s)');
+  return b;
+}
+const clientHasHistory=id=>[S.orders,S.asns,S.charges,S.invoices,S.moves,S.returns,S.vas].some(a=>a.some(x=>x.client===id));
 V['settings.data']=()=>page('Data','',card('Prototype data',`<div class="card-b" style="display:flex;flex-direction:column;gap:12px"><p style="margin:0">All records are sample data stored in this browser only. Other people opening this page see their own copy. Nothing is sent to a server.</p><div class="dl"><div><span>Clients</span><b>${S.clients.length}</b></div><div><span>Pallets</span><b>${S.stock.length}</b></div><div><span>Orders</span><b>${S.orders.length}</b></div><div><span>Ledger entries</span><b>${S.moves.length}</b></div><div><span>Charges</span><b>${S.charges.length}</b></div><div><span>Invoices</span><b>${S.invoices.length}</b></div></div><div class="row"><button class="btn danger" data-act="reset">Reset to fresh sample data</button></div><div id="resetBox"></div></div>`));
 
 /* ================= detail views ================= */
@@ -880,7 +953,7 @@ const DETAIL={
     <div style="display:grid;grid-template-columns:1fr auto;gap:4px 16px;justify-content:end;text-align:right;font-variant-numeric:tabular-nums"><span>Subtotal</span><b>${sar(v.subtotal)}</b><span>VAT 15%</span><b>${sar(v.vat)}</b><span>Total, SAR</span><b style="font-size:16px">${sar(v.total)}</b><span>Paid</span><b>${sar(v.paid)}</b><span>Balance</span><b>${sar(v.total-v.paid)}</b></div>`,
     acts:v.status==='Draft'?[['Issue & clear with ZATCA','issue'],['Delete draft','voidDraft']]:v.status==='Issued'?[['Record payment','payInv']]:[]}; },
   client(id){ const c=client(id); return {title:c.name,body:`<div class="dl"><div><span>Code</span><b>${c.id}</b></div><div><span>Industry</span><b>${esc(c.industry)}</b></div><div><span>Contact</span><b>${esc(c.contact)}</b></div><div><span>Phone</span><b>${esc(c.phone)}</b></div><div><span>Pick rule</span><b>${esc(c.rule)}</b></div><div><span>Payment terms</span><b>${c.terms} days</b></div></div>
-    <div class="dl"><div><span>Pallets held</span><b>${S.stock.filter(s=>s.client===id).length}</b></div><div><span>Orders all time</span><b>${S.orders.filter(o=>o.client===id).length}</b></div><div><span>Billed, SAR</span><b>${sar(sum(S.invoices.filter(v=>v.client===id),v=>v.total))}</b></div><div><span>Outstanding, SAR</span><b>${sar(sum(S.invoices.filter(v=>v.client===id&&v.status==='Issued'),v=>v.total-v.paid))}</b></div></div>`,acts:[['Edit rates','editRates']]}; },
+    <div class="dl"><div><span>Pallets held</span><b>${S.stock.filter(s=>s.client===id).length}</b></div><div><span>Orders all time</span><b>${S.orders.filter(o=>o.client===id).length}</b></div><div><span>Billed, SAR</span><b>${sar(sum(S.invoices.filter(v=>v.client===id),v=>v.total))}</b></div><div><span>Outstanding, SAR</span><b>${sar(sum(S.invoices.filter(v=>v.client===id&&v.status==='Issued'),v=>v.total-v.paid))}</b></div></div>`,acts:[['Edit rates','editRates'],...(isAdminNow()&&!c.archived?[['Edit details','editClient'],['Remove client','removeClient']]:[])]}; },
   item(sku){ const i=item(sku); const vars=S.items.filter(x=>x.parent===sku);
     const st=i.variant==='template'?S.stock.filter(s=>vars.some(v=>v.sku===s.sku)):S.stock.filter(s=>s.sku===sku);
     const yn=b=>b?'Yes':'No', f=(l,v,full)=>`<div${full?' style="grid-column:1/-1"':''}><span>${l}</span><b>${v}</b></div>`;
@@ -898,7 +971,7 @@ const DETAIL={
 };
 function openDetail(kind,id){
   const d=DETAIL[kind](id);
-  modal(d.title,d.body,d.acts.map(([l,a],i)=>`<button class="btn ${i===0?'pri':''} ${/Cancel|Delete/.test(l)?'danger':''}" data-act="${a}" data-id="${esc(id)}" data-close="1">${l}</button>`).join('')+'<button class="btn" data-close="1">Close</button>');
+  modal(d.title,d.body,d.acts.map(([l,a],i)=>`<button class="btn ${i===0?'pri':''} ${/Cancel|Delete|Remove/.test(l)?'danger':''}" data-act="${a}" data-id="${esc(id)}" data-close="1">${l}</button>`).join('')+'<button class="btn" data-close="1">Close</button>');
 }
 
 /* ================= modal + forms ================= */
@@ -942,7 +1015,7 @@ function readForm(){
     if(f.type==='lines'){ out[f.id]=[...fm.querySelectorAll('#lines_'+f.id+' .line')].map(r=>{const o={};r.querySelectorAll('[data-col]').forEach(i=>o[i.dataset.col]=i.value.trim());return o;}).filter(l=>l.sku&&+l.qty>0); continue; }
     if(f.type==='html') continue;
     if(f.type==='checks'){ out[f.id]=[...fm.querySelectorAll(`[name="${f.id}"]:checked`)].map(i=>i.value); continue; }
-    const el=fm.querySelector(`[name="${f.id}"]`); out[f.id]=el?el.value.trim():'';
+    const el=fm.querySelector(`[name="${f.id}"]`); out[f.id]=el?(f.type==='password'?el.value:el.value.trim()):'';
     if(f.req&&!out[f.id]) throw new Error(f.label+' is required.');
   }
   return out;
@@ -997,7 +1070,18 @@ const ACT={
   payInv(id){ const v=S.invoices.find(x=>x.id===id); form('Record payment · '+id,[{id:'amount',label:'Amount, SAR',type:'number',step:'0.01',value:(v.total-v.paid).toFixed(2),req:1},{id:'at',label:'Date',type:'date',value:today()},{id:'method',label:'Method',type:'select',options:[['Bank transfer','Bank transfer'],['SADAD','SADAD'],['Cheque','Cheque']]}],x=>{ OPS.pay(id,x.amount,x.at,x.method); done('Payment recorded.'); }); },
   newCharge(){ form('Manual charge',[{id:'client',label:'Client',type:'select',options:clientOpts()},{id:'type',label:'Service',value:'Extra handling'},{id:'qty',label:'Quantity',type:'number',value:1,min:0.01,step:'0.01',req:1},{id:'rate',label:'Rate, SAR',type:'number',value:50,step:'0.01',req:1},{id:'note',label:'Note'}],v=>{ charge(today(),v.client,v.type||'Manual',`Manual by ${'Hamza'}`,+v.qty,+v.rate,v.note); done('Charge added.'); },'Add charge'); },
   editRates(id){ const c=client(id); const r=c.rates; form('Rates · '+c.name,[['storage','Storage / pallet / day'],['inbound','Inbound / pallet'],['outbound','Outbound / pick line'],['order','Order fee'],['vas','VAS / unit'],['transport','Transport / drop']].map(([k,l])=>({id:k,label:l+', SAR',type:'number',step:'0.01',value:r[k],min:0})).concat([{id:'terms',label:'Payment terms, days',type:'number',value:c.terms},{id:'rule',label:'Pick rule',type:'select',options:[['FEFO','FEFO'],['FIFO','FIFO']],value:c.rule}]),v=>{ ['storage','inbound','outbound','order','vas','transport'].forEach(k=>r[k]=+v[k]); c.terms=+v.terms; c.rule=v.rule; done('Rates saved for '+c.name+'.'); }); },
-  newClient(){ form('New client',[{id:'name',label:'Company name',req:1},{id:'industry',label:'Industry'},{id:'contact',label:'Contact person'},{id:'phone',label:'Phone'},{id:'vat',label:'VAT number'},{id:'rule',label:'Pick rule',type:'select',options:[['FEFO','FEFO'],['FIFO','FIFO']]},{id:'storage',label:'Storage / pallet / day, SAR',type:'number',value:4,step:'0.01'},{id:'inbound',label:'Inbound / pallet, SAR',type:'number',value:10,step:'0.01'},{id:'outbound',label:'Outbound / pick line, SAR',type:'number',value:3,step:'0.01'},{id:'order',label:'Order fee, SAR',type:'number',value:6,step:'0.01'}],v=>{ const id='CL-'+String(S.clients.length+1).padStart(3,'0'); S.clients.push({id,name:v.name,industry:v.industry,contact:v.contact,phone:v.phone,vat:v.vat,rule:v.rule,terms:30,sla:24,rates:{storage:+v.storage,inbound:+v.inbound,outbound:+v.outbound,order:+v.order,vas:1,transport:90}}); done(v.name+' added as '+id+'.'); },'Add client'); },
+  newClient(){ adminOnly(); clientForm(); },
+  editClient(id){ adminOnly(); clientForm(client(id)); },
+  removeClient(id){ adminOnly(); const c=client(id), b=clientBlockers(id);
+    if(b.length) return modal('Cannot remove '+c.name,`<p style="margin:0">Close these first:</p><ul style="margin:0;padding-left:20px">${b.map(x=>`<li>${esc(x)}</li>`).join('')}</ul><p class="note" style="margin:0">Ship or adjust out the stock, finish or cancel orders, bill the charges and record payment for invoices.</p>`);
+    const hist=clientHasHistory(id), items=S.items.filter(i=>i.client===id).length;
+    modal('Remove '+c.name+'?',hist?`<p style="margin:0">${esc(c.name)} has past orders, charges or invoices, so it will be <b>archived</b>: hidden from lists and new records, with its history and reports kept. You can restore it later.</p>`
+      :`<p style="margin:0">${esc(c.name)} has no records, so it will be <b>deleted</b>${items?` together with its ${items} item(s)`:''}. This cannot be undone.</p>`,
+      `<button class="btn" data-close="1">Keep client</button><button class="btn danger" data-act="removeClientYes" data-id="${esc(id)}">${hist?'Archive client':'Delete client'}</button>`); },
+  removeClientYes(id){ adminOnly(); const c=client(id); if(clientBlockers(id).length) throw new Error('This client has open work. Try again after closing it.');
+    if(clientHasHistory(id)){ c.archived=true; c.archivedAt=today(); done(c.name+' archived.'); }
+    else { S.clients=S.clients.filter(x=>x.id!==id); S.items=S.items.filter(i=>i.client!==id); done(c.name+' deleted.'); } },
+  restoreClient(id){ adminOnly(); const c=client(id); c.archived=false; delete c.archivedAt; done(c.name+' restored.'); },
   newItem(){ itemEdit=null; go('master','itemform'); },
   editItem(sku){ itemEdit=sku; go('master','itemform'); },
   addConv(){ $('#convRows').insertAdjacentHTML('beforeend',convRow({},$('#it_uom').value)); $('#convRows').lastElementChild.querySelector('select').focus(); },
@@ -1006,7 +1090,15 @@ const ACT={
   newVehicle(){ form('New vehicle',[{id:'plate',label:'Plate',req:1},{id:'type',label:'Type',value:'Van'},{id:'capacity',label:'Pallets',type:'number',value:4}],v=>{ S.vehicles.push({id:'VH-'+String(S.vehicles.length+1).padStart(2,'0'),...v,capacity:+v.capacity}); done('Vehicle added.'); }); },
   newDriver(){ form('New driver',[{id:'name',label:'Name',req:1},{id:'phone',label:'Phone'}],v=>{ S.drivers.push({id:'DR-'+String(S.drivers.length+1).padStart(2,'0'),...v}); done('Driver added.'); }); },
   newReason(){ form('New reason code',[{id:'r',label:'Reason',req:1}],v=>{ S.reasons.push(v.r); done('Reason added.'); }); },
-  newUser(){ form('New user',[{id:'name',label:'Name',req:1},{id:'role',label:'Role',type:'select',options:['Administrator','Supervisor','Operator','Finance','Client user'].map(x=>[x,x])},{id:'wh',label:'Scope (warehouse or client code)',value:'All'}],v=>{ S.users.push(v); done('User added.'); }); },
+  newUser(){ adminOnly(); userForm(); },
+  editUser(id){ adminOnly(); userForm(AUTH.users().find(u=>u.id===id)); },
+  toggleUser(id){ const u=AUTH.users().find(x=>x.id===id); AUTH.setActive(id,!u.active); done(u.active?`${u.name} deactivated. They can no longer sign in.`:`${u.name} can sign in again.`); },
+  delUser(id){ adminOnly(); const u=AUTH.users().find(x=>x.id===id); modal('Delete '+u.name+'?',`<p style="margin:0">${esc(u.email)} will no longer be able to sign in. This cannot be undone. To block sign-in but keep the account, deactivate it instead.</p>`,`<button class="btn" data-close="1">Keep user</button><button class="btn danger" data-act="delUserYes" data-id="${esc(id)}">Delete user</button>`); },
+  delUserYes(id){ const u=AUTH.deleteUser(id); done(u.name+' deleted.'); },
+  newRole(){ adminOnly(); const roles=Object.keys(AUTH.roles()).filter(r=>r!==AUTH.ADMIN);
+    form('New role',[{id:'name',label:'Role name',req:1},{id:'copy',label:'Start with the access of',type:'select',options:[['','Nothing (Home only)'],...roles.map(r=>[r,r])]}],v=>{ const n=AUTH.addRole(v.name,v.copy); done(n+' added. Tick the modules it can open, then save.'); },'Add role'); },
+  delRole(name){ adminOnly(); modal('Delete role '+name+'?','<p style="margin:0">The role is removed. Users must have another role first.</p>',`<button class="btn" data-close="1">Keep role</button><button class="btn danger" data-act="delRoleYes" data-id="${esc(name)}">Delete role</button>`); },
+  delRoleYes(name){ AUTH.deleteRole(name); done('Role '+name+' deleted.'); },
   newBooking(){ form('Space request',[{id:'company',label:'Company',req:1},{id:'contact',label:'Contact email'},{id:'type',label:'Storage type',type:'select',options:['Ambient','Chilled','Frozen'].map(x=>[x,x])},{id:'pallets',label:'Pallets',type:'number',value:20,req:1},{id:'from',label:'Start date',type:'date',value:addDays(today(),7)},{id:'months',label:'Months',type:'number',value:6}],v=>{ const b=OPS.book(v); done(b.id+' logged.'); },'Submit request'); },
   bookOK(id){ S.bookings.find(b=>b.id===id).status='Approved'; done(id+' approved.'); },
   bookNo(id){ S.bookings.find(b=>b.id===id).status='Declined'; done(id+' declined.'); },
@@ -1057,7 +1149,16 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('submit',e=>{
   e.preventDefault();
-  if(e.target.id==='mForm'&&formSubmit){ try{ formSubmit.onSubmit(readForm()); }catch(err){ const el=$('#mErr'); if(el) el.textContent=err.message; } }
+  if(e.target.id==='mForm'&&formSubmit){
+    const fail=err=>{ const el=$('#mErr'); if(el) el.textContent=err.message; }, sb=e.submitter;
+    try{ const r=formSubmit.onSubmit(readForm()); if(r&&r.then){ if(sb) sb.disabled=true; r.catch(fail).finally(()=>{ if(sb&&document.contains(sb)) sb.disabled=false; }); } }catch(err){ fail(err); } }
+  if(e.target.id==='roleForm'){
+    try{ adminOnly(); const by={};
+      e.target.querySelectorAll('.acc:not(:disabled)').forEach(i=>{ (by[i.dataset.role]=by[i.dataset.role]||[]); if(i.checked) by[i.dataset.role].push(i.value); });
+      Object.entries(by).forEach(([r,m])=>AUTH.setRoleAccess(r,m)); render(); toast('Permissions saved.');
+    }catch(err){ toast(err.message); }
+    return;
+  }
   if(e.target.id==='itemForm'){
     try{
       const d=readItemForm(), r=OPS.saveItem(d,itemEdit); save();
@@ -1074,6 +1175,7 @@ document.addEventListener('submit',e=>{
 document.addEventListener('change',e=>{
   if(e.target.closest&&e.target.closest('#itemForm')){ updateItemForm(e.target); return; }
   const f=e.target.dataset.filt; if(f){ const [k,id]=f.split('.'); (filt[k]=filt[k]||{})[id]=e.target.value; render(); return; }
+  if(e.target.id==='f_role'&&$('#rolePrev')){ $('#rolePrev').innerHTML=roleSummaryLong(e.target.value); return; }
   if(e.target.id==='f_client'){ const opts=lineItemOpts(); document.querySelectorAll('.line select[data-col="sku"]').forEach(s=>{ s.innerHTML=opts.map(([v,t])=>`<option value="${esc(v)}">${esc(t)}</option>`).join(''); }); }
 });
 let qT; document.addEventListener('input',e=>{
@@ -1097,17 +1199,20 @@ $('#q').addEventListener('keydown',e=>{
 
 $('#signOut').addEventListener('click',()=>{ AUTH.signOut(); location.replace('login.html'); });
 // Another tab signed out (or in as someone else): follow it.
-window.addEventListener('storage',e=>{ if(e.key==='lanewms-session'){ const s=AUTH.get(); if(!s||s.email!==ME.email) location.replace('login.html'); } });
+// Session, user or role changes from another tab (or by an admin): follow them.
+function checkSession(){ const s=AUTH.get(); if(!s||s.id!==ME.id){ location.replace('login.html'); return; } if(s.role!==ME.role){ location.reload(); return; } fillUser(); renderSide(); }
+function fillUser(){ const s=AUTH.get()||ME; $('#userName').textContent=s.name; $('#userRole').textContent=s.role+(s.title&&s.title!==s.role?' · '+s.title:'');
+  $('#userAvatar').textContent=s.name.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
+window.addEventListener('storage',e=>{ if(e.key==='lanewms-session'||e.key==='lanewms-auth') checkSession(); });
 
 /* boot (only when signed in; otherwise auth.js is already redirecting to login.html) */
 if(ME){
-  $('#userName').textContent=ME.name; $('#userRole').textContent=ME.role+' · '+ME.title;
-  $('#userAvatar').textContent=ME.name.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase();
+  fillUser();
   S=load();
   if(!S||!S.clients||!S.clients.length) seed(); else { normalizeItems(); save(); }
   parseHash();
   try{ history.replaceState(null,'','#'+route.m+'.'+route.s); }catch(e){}
   try{ render(); }
   catch(err){ console.error(err); seed(); route={m:'home',s:'dash'}; render(); toast('Saved data could not be read, so fresh sample data was loaded.'); }
-  setInterval(()=>{ if(!AUTH.get()) location.replace('login.html'); },60000); // session expiry
+  setInterval(checkSession,60000); // session expiry and admin changes
 }

@@ -10,12 +10,17 @@
   const esc = v => String(v).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const initials = n => n.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase();
 
-  $('#demoList').innerHTML = AUTH.ACCOUNTS.map((a,i) =>
-    `<button type="button" class="demo-acc" data-i="${i}"><span class="avatar">${esc(initials(a.name))}</span><span><b>${esc(a.role)}</b><small>${esc(a.email)}</small></span><span class="demo-fill">Use</span></button>`).join('');
+  let demos = [];
+  AUTH.ready.then(() => {
+    demos = AUTH.demoAccounts();
+    $('#demoList').innerHTML = demos.map((a,i) =>
+      `<button type="button" class="demo-acc" data-i="${i}" aria-label="Use the ${esc(a.role)} demo account"><span class="avatar">${esc(initials(a.name))}</span><span><b>${esc(a.role)}</b><small>${esc(a.email)}</small></span><span class="demo-fill">Use</span></button>`).join('');
+    $('.demo').hidden = !demos.length;
+  });
 
   $('#demoList').addEventListener('click', e => {
     const b = e.target.closest('.demo-acc'); if(!b) return;
-    const a = AUTH.ACCOUNTS[+b.dataset.i];
+    const a = demos[+b.dataset.i];
     email.value = a.email; pw.value = a.password; showErr('');
     document.querySelectorAll('.demo-acc').forEach(x => x.classList.toggle('on', x === b));
     btn.focus();
@@ -35,14 +40,16 @@
     if(msg){ void form.offsetWidth; form.classList.add('shake'); }
   }
 
-  form.addEventListener('submit', e => {
+  form.addEventListener('submit', async e => {
     e.preventDefault();
+    if(btn.disabled) return;
+    btn.disabled = true; btn.textContent = 'Signing in…';
     try{
-      AUTH.signIn(email.value, pw.value, $('#remember').checked);
-      btn.disabled = true; btn.textContent = 'Signing in…';
+      await AUTH.signIn(email.value, pw.value, $('#remember').checked);
       document.body.classList.add('leaving');
       setTimeout(goApp, 180);
     }catch(ex){
+      btn.disabled = false; btn.textContent = 'Sign in';
       showErr(ex.message);
       (email.value.trim() ? pw : email).focus();
     }

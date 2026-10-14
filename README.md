@@ -37,20 +37,28 @@ Then open http://localhost:8765.
 2. In the repository, go to **Settings → Pages → Build and deployment** and set **Source** to **GitHub Actions**.
 3. The workflow in `.github/workflows/pages.yml` checks the JavaScript and publishes the site on every push to `main`. The address appears on the workflow run, usually `https://<user>.github.io/<repo>/`.
 
-## Sign-in
+## Sign-in and administration
 
-Opening the app takes you to `login.html` first. There are four demo accounts, one per role, and the sign-in page fills them in with one click (the details are in `js/auth.js`):
+Opening the app takes you to `login.html` first. On the first visit four demo accounts are created, one per role, and the sign-in page fills them in with one click.
+
+**Administrators** have full access, and only they can open **Settings**:
+
+- **Settings → Users & access**: create users with their own email and password, change their role, reset passwords, and deactivate or delete accounts. Passwords need at least 8 characters with a letter and a number.
+- **Settings → Roles & permissions**: tick which modules each role can open, and add custom roles (for example Auditor) starting from an existing role's access.
+- **Clients & Contracts → Clients**: add, edit and remove clients. A client with stock, open orders, unbilled charges or unpaid invoices cannot be removed until that work is closed. A client with past records is archived (hidden but kept for history and reports, and can be restored). A client with no records is deleted.
+
+Safety checks: an administrator cannot delete or deactivate their own account, and there is always at least one active Administrator. Role changes and deactivations apply to signed-in users straight away. Sessions last 8 hours; with **Keep me signed in** unticked, closing the browser signs you out.
+
+Default role access:
 
 | Role | Modules |
 |---|---|
-| Administrator | Everything |
+| Administrator | Everything, including Settings |
 | Supervisor | All operations and reports; no billing, finance or settings |
 | Operator | Inbound, inventory, outbound, returns, VAS, cold chain, labour |
 | Finance | Clients, billing, finance and ZATCA, reports |
 
-Sessions last 8 hours. With **Keep me signed in** unticked, closing the browser signs you out.
-
-**This sign-in is not security.** The site is static, so the accounts are in the page source and anyone can read them. It keeps casual visitors out and shows each role its own view. For real accounts, add a backend that checks passwords on the server, for example Supabase Auth or Firebase Authentication.
+**This is not security.** The site is static: users, roles and password hashes are saved in each browser's `localStorage`, so users created on one computer do not exist on another, and anyone can read the code. It shows how roles and administration work. For a real team, move sign-in and user storage to a backend, for example Supabase Auth or Firebase Authentication.
 
 ## Data
 
@@ -69,7 +77,7 @@ index.html          App shell
 login.html          Sign-in page
 css/styles.css      Styles (light and dark themes)
 css/login.css       Sign-in page styles
-js/auth.js          Demo accounts, sessions and role access
+js/auth.js          Users, password hashing, sessions and role access
 js/login.js         Sign-in page behaviour
 js/app.js           State, business logic, views and event handling
 .github/workflows/  GitHub Pages deployment
